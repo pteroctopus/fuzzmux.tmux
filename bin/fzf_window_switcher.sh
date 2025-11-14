@@ -120,9 +120,9 @@ while IFS='|' read -r session window name panes active attached; do
     pane_commands=$(tmux list-panes -t "${session}:${window}" -F "#{pane_current_command}" | paste -sd "," -)
     
     if [[ "$USE_COLORS" == "true" ]]; then
-        FORMATED_WINDOW_LIST+="$(pick_color "$session" "$window")s${session} w${window}${COLORS[reset]} ${name} (${panes} panes) ${pane_commands} ${active_marker}"$'\n'
+        FORMATED_WINDOW_LIST+="$(pick_color "$session" "$window")s:${session} w:${window}${COLORS[reset]} ${name} (${panes} panes) ${pane_commands} ${active_marker}"$'\n'
     else
-        FORMATED_WINDOW_LIST+="s${session} w${window} ${name} (${panes} panes) ${pane_commands} ${active_marker}"$'\n'
+        FORMATED_WINDOW_LIST+="s:${session} w:${window} ${name} (${panes} panes) ${pane_commands} ${active_marker}"$'\n'
     fi
 done <<< "$WINDOW_LIST"
 
@@ -131,8 +131,8 @@ FORMATED_WINDOW_LIST=$(echo "$FORMATED_WINDOW_LIST" | column -t -s ' ')
 if [[ "$PREVIEW" == "true" ]]; then
     SELECTION=$(echo "$FORMATED_WINDOW_LIST" | fzf --ansi --exit-0 \
         --preview '
-            sess=$(echo {} | awk "{print \$1}" | sed "s/^s//")
-            win=$(echo {} | awk "{print \$2}" | sed "s/^w//")
+            sess=$(echo {} | awk "{print \$1}" | sed "s/^s://")
+            win=$(echo {} | awk "{print \$2}" | sed "s/^w://")
             pane=$(tmux list-panes -t "${sess}:${win}" -F "#{pane_index} #{pane_active}" | grep " 1$" | cut -d" " -f1)
             tmux capture-pane -pt "${sess}:${win}.${pane}" -e | tail -n 50
         ' \
@@ -143,8 +143,8 @@ else
 fi
 
 while IFS=" " read -r session window _rest; do
-    session="${session#s}"
-    window="${window#w}"
+    session="${session#s:}"
+    window="${window#w:}"
     tmux switch-client -t "${session}:${window}"
     if [[ "$ZOOM" == "true" ]]; then
         # Check if window is already zoomed

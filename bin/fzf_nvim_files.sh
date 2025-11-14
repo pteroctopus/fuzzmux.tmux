@@ -125,9 +125,9 @@ while IFS='=' read -r var_name files; do
             # Replace home directory with ~
             display_path="${filepath/#$HOME/\~}"
             if [[ "$USE_COLORS" == "true" ]]; then
-                FILE_LIST+="$(pick_color "$session" "$window")s${session} w${window} p${pane}${COLORS[reset]} ${display_path}"$'\n'
+                FILE_LIST+="$(pick_color "$session" "$window")s:${session} w:${window} p:${pane}${COLORS[reset]} ${display_path}"$'\n'
             else
-                FILE_LIST+="s${session} w${window} p${pane} ${display_path}"$'\n'
+                FILE_LIST+="s:${session} w:${window} p:${pane} ${display_path}"$'\n'
             fi
         fi
     done
@@ -180,9 +180,9 @@ fi
 
 # Parse selection and switch to that pane
 read -r session window pane filepath <<< "$SELECTION"
-session="${session#s}"
-window="${window#w}"
-pane="${pane#p}"
+session="${session#s:}"
+window="${window#w:}"
+pane="${pane#p:}"
 
 # Expand ~ back to home directory for nvim command
 filepath="${filepath/#\~/$HOME}"

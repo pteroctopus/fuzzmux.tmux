@@ -113,9 +113,9 @@ while IFS='|' read -r session windows attached created; do
     created_date=$(date -r "$created" "+%Y-%m-%d %H:%M" 2>/dev/null || echo "")
     
     if [[ "$USE_COLORS" == "true" ]]; then
-        FORMATTED_SESSION_LIST+="$(pick_color "$session")s${session}${COLORS[reset]} ${windows} windows ${created_date} ${window_names} ${attached_marker}"$'\n'
+        FORMATTED_SESSION_LIST+="$(pick_color "$session")s:${session}${COLORS[reset]} ${windows} windows ${created_date} ${window_names} ${attached_marker}"$'\n'
     else
-        FORMATTED_SESSION_LIST+="s${session} ${windows} windows ${created_date} ${window_names} ${attached_marker}"$'\n'
+        FORMATTED_SESSION_LIST+="s:${session} ${windows} windows ${created_date} ${window_names} ${attached_marker}"$'\n'
     fi
 done <<< "$SESSION_LIST"
 
@@ -124,7 +124,7 @@ FORMATTED_SESSION_LIST=$(echo "$FORMATTED_SESSION_LIST" | column -t -s ' ')
 if [[ "$PREVIEW" == "true" ]]; then
     SELECTION=$(echo "$FORMATTED_SESSION_LIST" | fzf --ansi --exit-0 \
         --preview '
-            sess=$(echo {} | awk "{print \$1}" | sed "s/^s//")
+            sess=$(echo {} | awk "{print \$1}" | sed "s/^s://")
             tmux list-windows -t "${sess}" -F "#{window_index}: #{window_name} (#{window_panes} panes) #{window_active}" | \
             while IFS= read -r line; do
                 # Remove the trailing " 1" or " 0" but keep the rest
@@ -144,7 +144,7 @@ else
 fi
 
 while IFS=" " read -r session _rest; do
-    session="${session#s}"
+    session="${session#s:}"
     tmux switch-client -t "${session}"
     if [[ "$ZOOM" == "true" ]]; then
         # Zoom the active pane in the active window of the session
