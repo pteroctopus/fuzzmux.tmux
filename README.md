@@ -17,6 +17,8 @@ Works with [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim) to track 
 - **Configurable** - Customize keybindings and behavior
 - **Feature toggles** - Enable/disable individual features as needed
 
+https://github.com/user-attachments/assets/76bac81f-d7ae-45ee-8a54-c00b87e01103
+
 ## Requirements
 
 - **tmux** >= 3.2 (required for `display-popup`)
