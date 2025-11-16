@@ -114,9 +114,14 @@ while IFS='=' read -r var_name files; do
     # Extract session, window, pane from variable name
     # Format: FUZZMUX_OPEN_FILES_session_window_pane
     parts="${var_name#FUZZMUX_OPEN_FILES_}"
-    session=$(echo "$parts" | cut -d_ -f1)
-    window=$(echo "$parts" | cut -d_ -f2)
-    pane=$(echo "$parts" | cut -d_ -f3)
+    pane_id=$(echo "$parts" | cut -d= -f1)
+
+    coords=$(tmux display-message -p -t "$pane_id" '#{session_name}:#{window_index}:#{pane_index}:#{pane_id}')
+
+    session=$(echo "$coords" | cut -d: -f1)
+    window=$(echo "$coords" | cut -d: -f2)
+    pane=$(echo "$coords" | cut -d: -f3)
+    pane_id=$(echo "$coords" | cut -d: -f4)
     
     # Split files by colon and create one line per file
     IFS=':' read -ra PATHS <<< "$files"
@@ -125,9 +130,9 @@ while IFS='=' read -r var_name files; do
             # Replace home directory with ~
             display_path="${filepath/#$HOME/\~}"
             if [[ "$USE_COLORS" == "true" ]]; then
-                FILE_LIST+="$(pick_color "$session" "$window")s:${session} w:${window} p:${pane}${COLORS[reset]} ${display_path}"$'\n'
+                FILE_LIST+="$(pick_color "$session" "$window")s:${session} w:${window} p:${pane} i:${pane_id}${COLORS[reset]} ${display_path}"$'\n'
             else
-                FILE_LIST+="s:${session} w:${window} p:${pane} ${display_path}"$'\n'
+                FILE_LIST+="s:${session} w:${window} p:${pane} i:${pane_id} ${display_path}"$'\n'
             fi
         fi
     done
@@ -158,15 +163,15 @@ fzf_with_options() {
       '
 
       if [[ "$use_colors" == "true" ]]; then
-          fzf --ansi --exit-0 --preview "$preview_cmd"
+          fzf --ansi --exit-0 --with-nth=1,2,3,5 --preview "$preview_cmd"
       else
-          fzf --exit-0 --preview "$preview_cmd"
+          fzf --exit-0 --with-nth=1,2,3,5 --preview "$preview_cmd"
       fi
     else
       if [[ "$use_colors" == "true" ]]; then
-          fzf --ansi --exit-0
+          fzf --ansi --exit-0 --with-nth=1,2,3,5
       else
-          fzf --exit-0
+          fzf --exit-0 --with-nth=1,2,3,5
       fi
     fi
 }
@@ -179,10 +184,11 @@ else
 fi
 
 # Parse selection and switch to that pane
-read -r session window pane filepath <<< "$SELECTION"
+read -r session window pane pane_id filepath <<< "$SELECTION"
 session="${session#s:}"
 window="${window#w:}"
 pane="${pane#p:}"
+pane_id="${pane_id#i:}"
 
 # Expand ~ back to home directory for nvim command
 filepath="${filepath/#\~/$HOME}"
@@ -206,4 +212,11 @@ if [[ "$current_cmd" != "nvim" ]]; then
 fi
 
 # Send command to nvim to open the file
-tmux send-keys -t "${session}:${window}.${pane}" Escape ":buffer ${filepath}" Enter
+socket=$(tmux show-environment -g FUZZMUX_NVIM_SOCKET_${pane_id} 2>/dev/null | cut -d= -f2- || true)
+socket=${socket#\'}
+socket=${socket%\'}
+
+nvim --clean --server \
+  "$socket" \
+  --remote-send \
+  ":silent buffer ${filepath}<cr>"

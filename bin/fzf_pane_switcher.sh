@@ -99,13 +99,13 @@ pick_color() {
     printf "%s" "${COLORS[$color_name]}"
 }
 
-FORMAT="#{session_name}|#{window_index}|#{pane_index}|#{pane_current_command}|#{pane_title}|#{=|-40|…;s|$HOME|~|:pane_current_path}"
+FORMAT="#{session_name}|#{window_index}|#{pane_index}|#{pane_id}|#{pane_current_command}|#{pane_title}|#{=|-40|…;s|$HOME|~|:pane_current_path}"
 
 PANE_LIST=$(tmux list-panes -a -F "$FORMAT")
 
 FORMATED_PANE_LIST=""
-while IFS='|' read -r session window pane command title path; do
-    var_name="FUZZMUX_CURRENT_FILE_${session}_${window}_${pane}"
+while IFS='|' read -r session window pane pane_id command title path; do
+    var_name="FUZZMUX_CURRENT_FILE_${pane_id}"
     nvim_file=$(tmux show-environment -g "$var_name" 2>/dev/null | cut -d= -f2- || echo "")
     nvim_file="${nvim_file/#$HOME/\~}"
     if [[ "$USE_COLORS" == "true" ]]; then
