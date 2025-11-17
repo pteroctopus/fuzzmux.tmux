@@ -83,9 +83,9 @@ while IFS='|' read -r session window pane pane_id command title path; do
     nvim_file=$(tmux show-environment -g "$var_name" 2>/dev/null | cut -d= -f2- || echo "")
     nvim_file="${nvim_file/#$HOME/\~}"
     if [[ "$USE_COLORS" == "true" ]]; then
-        FORMATED_PANE_LIST+="$(pick_color "$session" "$window")s:${session} w:${window} p:${pane}${COLORS[reset]} ${command} ${title} ${path} ${nvim_file}"$'\n'
+        FORMATED_PANE_LIST+="$(pick_color "$session" "$window")@${session} #${window} %${pane}${COLORS[reset]} ${command} ${title} ${path} ${nvim_file}"$'\n'
     else
-        FORMATED_PANE_LIST+="s:${session} w:${window} p:${pane} ${command} ${title} ${path} ${nvim_file}"$'\n'
+        FORMATED_PANE_LIST+="@${session} #${window} %${pane} ${command} ${title} ${path} ${nvim_file}"$'\n'
     fi
 done <<< "$PANE_LIST"
 
@@ -94,9 +94,9 @@ FORMATED_PANE_LIST=$(echo "$FORMATED_PANE_LIST" | column -t -s ' ')
 if [[ "$PREVIEW" == "true" ]]; then
     SELECTION=$(echo "$FORMATED_PANE_LIST" | fzf --ansi --exit-0 \
         --preview '
-            sess=$(echo {} | awk "{print \$1}" | sed "s/^s://")
-            win=$(echo {} | awk "{print \$2}" | sed "s/^w://")
-            pane=$(echo {} | awk "{print \$3}" | sed "s/^p://")
+            sess=$(echo {} | awk "{print \$1}" | sed "s/^@//")
+            win=$(echo {} | awk "{print \$2}" | sed "s/^#//")
+            pane=$(echo {} | awk "{print \$3}" | sed "s/^%//")
             command=$(echo {} | awk "{print \$4}" | sed "s/^p//")
             if [[ "$command" == "zsh" ]]; then
               tmux capture-pane -pt "${sess}:${win}.${pane}" -e | sed "/./!d" | tail -n "$FZF_PREVIEW_LINES"
@@ -111,9 +111,9 @@ else
 fi
 
 while IFS=" " read -r session window pane _rest; do
-    session="${session#s:}"
-    window="${window#w:}"
-    pane="${pane#p:}"
+    session="${session#@}"
+    window="${window#\#}"
+    pane="${pane#%}"
     tmux switch-client -t "${session}:${window}"
     tmux select-pane -t "${pane}"
     if [[ "$ZOOM" == "true" ]]; then

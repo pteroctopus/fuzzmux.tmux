@@ -104,9 +104,9 @@ while IFS='=' read -r var_name files; do
             # Replace home directory with ~
             display_path="${filepath/#$HOME/\~}"
             if [[ "$USE_COLORS" == "true" ]]; then
-                FILE_LIST+="$(pick_color "$session" "$window")s:${session} w:${window} p:${pane} i:${pane_id}${COLORS[reset]} ${display_path}"$'\n'
+                FILE_LIST+="$(pick_color "$session" "$window")@${session} #${window} %${pane} i:${pane_id}${COLORS[reset]} ${display_path}"$'\n'
             else
-                FILE_LIST+="s:${session} w:${window} p:${pane} i:${pane_id} ${display_path}"$'\n'
+                FILE_LIST+="@${session} #${window} %${pane} i:${pane_id} ${display_path}"$'\n'
             fi
         fi
     done
@@ -159,9 +159,9 @@ fi
 
 # Parse selection and switch to that pane
 read -r session window pane pane_id filepath <<< "$SELECTION"
-session="${session#s:}"
-window="${window#w:}"
-pane="${pane#p:}"
+session="${session#@}"
+window="${window#\#}"
+pane="${pane#%}"
 pane_id="${pane_id#i:}"
 
 # Expand ~ back to home directory for nvim command
@@ -182,7 +182,6 @@ current_cmd=$(tmux display-message -t "${session}:${window}.${pane}" -p '#{pane_
 if [[ "$current_cmd" != "nvim" ]]; then
     # Resume nvim if suspended
     tmux send-keys -t "${session}:${window}.${pane}" "fg" Enter
-    # sleep 0.2
 fi
 
 # Send command to nvim to open the file
