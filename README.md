@@ -188,6 +188,18 @@ The `*` indicates the currently attached session. The preview window shows all w
 - Press <kbd>Enter</kbd> to switch to the selected session
 - Press <kbd>Esc</kbd> or <kbd>Ctrl-c</kbd> to cancel
 
+### Window Switcher
+
+Press `prefix` + <kbd>w</kbd> to open the window switcher:
+
+```
+@0 #0  nvim      (3 panes)  zsh,nvim,zsh  *
+@0 #1  server    (1 panes)  node
+@1 #0  database  (2 panes)  psql,zsh
+```
+
+The `*` indicates the currently active window.
+
 ### Pane Switcher
 
 Press `prefix` + <kbd>p</kbd> to open the pane switcher. You'll see a list like:
@@ -202,18 +214,6 @@ Press `prefix` + <kbd>p</kbd> to open the pane switcher. You'll see a list like:
 - Use arrow keys to navigate
 - Press <kbd>Enter</kbd> to switch to the selected pane
 - Press <kbd>Esc</kbd> or <kbd>Ctrl-c</kbd> to cancel
-
-### Window Switcher
-
-Press `prefix` + <kbd>w</kbd> to open the window switcher:
-
-```
-@0 #0  nvim      (3 panes)  zsh,nvim,zsh  *
-@0 #1  server    (1 panes)  node
-@1 #0  database  (2 panes)  psql,zsh
-```
-
-The `*` indicates the currently active window.
 
 ### Neovim Buffer Switcher
 
@@ -289,8 +289,8 @@ sudo pacman -S bat
 fuzzmux.nvim sets global tmux environment variables with information about open buffers:
 
 ```bash
-FUZZMUX_OPEN_FILES_<session>_<window>_<pane>="file1.txt:file2.txt:file3.txt"
-FUZZMUX_CURRENT_FILE_<session>_<window>_<pane>="current_file.txt"
+FUZZMUX_OPEN_FILES_<pane_id>="file1.txt:file2.txt:file3.txt"
+FUZZMUX_CURRENT_FILE_<pane_id>="current_file.txt"
 ```
 
 fuzzmux.tmux reads these variables to display and switch between buffers.
