@@ -3,14 +3,14 @@ set -euo pipefail
 
 # Check if running inside tmux
 if [[ -z "${TMUX:-}" ]]; then
-    echo "Error: Must be run from inside tmux"
-    exit 1
+  echo "Error: Must be run from inside tmux"
+  exit 1
 fi
 
 # Check if fzf is installed
 if ! command -v fzf >/dev/null 2>&1; then
-    tmux display-message "fuzzmux.tmux: ERROR - fzf is not installed"
-    exit 1
+  tmux display-message "fuzzmux.tmux: ERROR - fzf is not installed"
+  exit 1
 fi
 
 ZOOM=false
@@ -22,52 +22,52 @@ POPUP_BORDER="rounded"
 POPUP_COLOR="green"
 
 while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --zoom)
-            ZOOM=true
-            shift
-            ;;
-        --colors)
-            USE_COLORS=true
-            shift
-            ;;
-        --preview)
-            PREVIEW=true
-            shift
-            ;;
-        --popup-width=*)
-            POPUP_WIDTH="${1#*=}"
-            shift
-            ;;
-        --popup-height=*)
-            POPUP_HEIGHT="${1#*=}"
-            shift
-            ;;
-        --popup-border=*)
-            POPUP_BORDER="${1#*=}"
-            shift
-            ;;
-        --popup-color=*)
-            POPUP_COLOR="${1#*=}"
-            shift
-            ;;
-        --run)
-            break
-            ;;
-        *)
-            shift
-            ;;
-    esac
+  case "$1" in
+  --zoom)
+    ZOOM=true
+    shift
+    ;;
+  --colors)
+    USE_COLORS=true
+    shift
+    ;;
+  --preview)
+    PREVIEW=true
+    shift
+    ;;
+  --popup-width=*)
+    POPUP_WIDTH="${1#*=}"
+    shift
+    ;;
+  --popup-height=*)
+    POPUP_HEIGHT="${1#*=}"
+    shift
+    ;;
+  --popup-border=*)
+    POPUP_BORDER="${1#*=}"
+    shift
+    ;;
+  --popup-color=*)
+    POPUP_COLOR="${1#*=}"
+    shift
+    ;;
+  --run)
+    break
+    ;;
+  *)
+    shift
+    ;;
+  esac
 done
 
 if [[ "${1:-}" != "--run" ]]; then
-    ARGS=""
-    [[ "$ZOOM" == "true" ]] && ARGS+=" --zoom"
-    [[ "$USE_COLORS" == "true" ]] && ARGS+=" --colors"
-    [[ "$PREVIEW" == "true" ]] && ARGS+=" --preview"
-    ARGS+=" --popup-width=$POPUP_WIDTH --popup-height=$POPUP_HEIGHT --popup-border=$POPUP_BORDER --popup-color=$POPUP_COLOR"
-    tmux display-popup -S "fg=${POPUP_COLOR}" -b "${POPUP_BORDER}" -T "Find tmux pane" -w "${POPUP_WIDTH}" -h "${POPUP_HEIGHT}" -E "$0$ARGS --run"
-    exit 0
+  ARGS=""
+  [[ "$ZOOM" == "true" ]] && ARGS+=" --zoom"
+  [[ "$USE_COLORS" == "true" ]] && ARGS+=" --colors"
+  [[ "$PREVIEW" == "true" ]] && ARGS+=" --preview"
+  ARGS+=" --popup-width=$POPUP_WIDTH --popup-height=$POPUP_HEIGHT --popup-border=$POPUP_BORDER --popup-color=$POPUP_COLOR"
+  tmux display-popup -S "fg=${POPUP_COLOR}" -b "${POPUP_BORDER}" -T "Find tmux pane" -w "${POPUP_WIDTH}" -h "${POPUP_HEIGHT}" -E "$0$ARGS --run"
+  exit 0
 fi
 
 # Source scripts
@@ -79,21 +79,22 @@ PANE_LIST=$(tmux list-panes -a -F "$FORMAT")
 
 FORMATED_PANE_LIST=""
 while IFS='|' read -r session window pane pane_id command title path; do
-    var_name="FUZZMUX_CURRENT_FILE_${pane_id}"
-    nvim_file=$(tmux show-environment -g "$var_name" 2>/dev/null | cut -d= -f2- || echo "")
-    nvim_file="${nvim_file/#$HOME/\~}"
-    if [[ "$USE_COLORS" == "true" ]]; then
-        FORMATED_PANE_LIST+="$(pick_color "$session" "$window")@${session} #${window} %${pane}${COLORS[reset]} ${command} ${title} ${path} ${nvim_file}"$'\n'
-    else
-        FORMATED_PANE_LIST+="@${session} #${window} %${pane} ${command} ${title} ${path} ${nvim_file}"$'\n'
-    fi
-done <<< "$PANE_LIST"
+  var_name="FUZZMUX_CURRENT_FILE_${pane_id}"
+  nvim_file=$(tmux show-environment -g "$var_name" 2>/dev/null | cut -d= -f2- || echo "")
+  nvim_file="${nvim_file/#$HOME/\~}"
+  if [[ "$USE_COLORS" == "true" ]]; then
+    FORMATED_PANE_LIST+="$(pick_color "$session" "$window")@${session} #${window} %${pane}${COLORS[reset]} ${command} ${title} ${path} ${nvim_file}"$'\n'
+  else
+    FORMATED_PANE_LIST+="@${session} #${window} %${pane} ${command} ${title} ${path} ${nvim_file}"$'\n'
+  fi
+done <<<"$PANE_LIST"
 
 FORMATED_PANE_LIST=$(echo "$FORMATED_PANE_LIST" | column -t -s ' ')
 
 if [[ "$PREVIEW" == "true" ]]; then
-    SELECTION=$(echo "$FORMATED_PANE_LIST" | fzf --ansi --exit-0 \
-        --preview '
+  SELECTION=$(
+    echo "$FORMATED_PANE_LIST" | fzf --ansi --exit-0 \
+      --preview '
             sess=$(echo {} | awk "{print \$1}" | sed "s/^@//")
             win=$(echo {} | awk "{print \$2}" | sed "s/^#//")
             pane=$(echo {} | awk "{print \$3}" | sed "s/^%//")
@@ -104,23 +105,23 @@ if [[ "$PREVIEW" == "true" ]]; then
               tmux capture-pane -pt "${sess}:${win}.${pane}" -e | head -n "$FZF_PREVIEW_LINES"
             fi
         ' \
-        --preview-window=top:50%
-    ) || exit 0
+      --preview-window=top:50%
+  ) || exit 0
 else
-    SELECTION=$(echo "$FORMATED_PANE_LIST" | fzf --ansi --exit-0) || exit 0
+  SELECTION=$(echo "$FORMATED_PANE_LIST" | fzf --ansi --exit-0) || exit 0
 fi
 
 while IFS=" " read -r session window pane _rest; do
-    session="${session#@}"
-    window="${window#\#}"
-    pane="${pane#%}"
-    tmux switch-client -t "${session}:${window}"
-    tmux select-pane -t "${pane}"
-    if [[ "$ZOOM" == "true" ]]; then
-        # Check if pane is already zoomed
-        is_zoomed=$(tmux display-message -t "${session}:${window}.${pane}" -p '#{window_zoomed_flag}')
-        if [[ "$is_zoomed" != "1" ]]; then
-            tmux resize-pane -Z -t "${pane}"
-        fi
+  session="${session#@}"
+  window="${window#\#}"
+  pane="${pane#%}"
+  tmux switch-client -t "${session}:${window}"
+  tmux select-pane -t "${pane}"
+  if [[ "$ZOOM" == "true" ]]; then
+    # Check if pane is already zoomed
+    is_zoomed=$(tmux display-message -t "${session}:${window}.${pane}" -p '#{window_zoomed_flag}')
+    if [[ "$is_zoomed" != "1" ]]; then
+      tmux resize-pane -Z -t "${pane}"
     fi
-done <<< "$SELECTION"
+  fi
+done <<<"$SELECTION"

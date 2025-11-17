@@ -4,13 +4,13 @@
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 tmux_option_or_fallback() {
-    local option_value
-    option_value="$(tmux show-option -gqv "$1")"
-    if [ -z "$option_value" ]; then
-        echo "$2"
-    else
-        echo "$option_value"
-    fi
+  local option_value
+  option_value="$(tmux show-option -gqv "$1")"
+  if [ -z "$option_value" ]; then
+    echo "$2"
+  else
+    echo "$option_value"
+  fi
 }
 
 # Set plugin defaults if not already set

@@ -11,21 +11,20 @@ COLORS[cyan]=$'\033[36m'
 COLOR_NAMES=(red green yellow blue magenta cyan)
 
 pick_color() {
-    local s="${1:-x}"
-    local w="${2:-x}"
-    
-    # Simple hash: combine s and w and sum ASCII codes
-    local combined="${s}${w}"
-    local sum=0
-    for ((i=0; i<${#combined}; i++)); do
-        sum=$((sum + $(printf "%d" "'${combined:i:1}") ))
-    done
+  local s="${1:-x}"
+  local w="${2:-x}"
 
-    # Pick color deterministically
-    local idx=$((sum % ${#COLOR_NAMES[@]}))
-    local color_name="${COLOR_NAMES[$idx]}"
+  # Simple hash: combine s and w and sum ASCII codes
+  local combined="${s}${w}"
+  local sum=0
+  for ((i = 0; i < ${#combined}; i++)); do
+    sum=$((sum + $(printf "%d" "'${combined:i:1}")))
+  done
 
-    # Return the actual ANSI escape sequence
-    printf "%s" "${COLORS[$color_name]}"
+  # Pick color deterministically
+  local idx=$((sum % ${#COLOR_NAMES[@]}))
+  local color_name="${COLOR_NAMES[$idx]}"
+
+  # Return the actual ANSI escape sequence
+  printf "%s" "${COLORS[$color_name]}"
 }
-
