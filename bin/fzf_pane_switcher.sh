@@ -81,6 +81,8 @@ FORMATED_PANE_LIST=""
 while IFS='|' read -r session window pane pane_id command title path; do
   var_name="FUZZMUX_CURRENT_FILE_${pane_id}"
   nvim_file=$(tmux show-environment -g "$var_name" 2>/dev/null | cut -d= -f2- || echo "")
+  nvim_file=${nvim_file#\'}
+  nvim_file=${nvim_file%\'}
   nvim_file="${nvim_file/#$HOME/\~}"
   if [[ "$USE_COLORS" == "true" ]]; then
     FORMATED_PANE_LIST+="$(pick_color "$session" "$window")@${session} #${window} %${pane}${COLORS[reset]} ${command} ${title} ${path} ${nvim_file}"$'\n'
