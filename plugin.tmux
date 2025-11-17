@@ -31,8 +31,5 @@ tmux set-option -gq @fuzzmux-popup-height "$(tmux_option_or_fallback @fuzzmux-po
 tmux set-option -gq @fuzzmux-popup-border-style "$(tmux_option_or_fallback @fuzzmux-popup-border-style 'rounded')"
 tmux set-option -gq @fuzzmux-popup-border-color "$(tmux_option_or_fallback @fuzzmux-popup-border-color 'green')"
 
-# Initialize hooks
-# tmux set-hook -g session-renamed "run-shell '$CURRENT_DIR/scripts/session_renamed.sh #{session_name}'"
-
 # Load plugin initializer
 "$CURRENT_DIR/scripts/init.sh"

@@ -137,6 +137,7 @@ FORMATTED_LIST=$(echo "$FILE_LIST" | column -t -s "${DEL}")
 fzf_with_options() {
   local use_colors="${1:-false}"
   local preview="${2:-false}"
+  prompt="nvim buffer > "
 
   if [[ "$preview" == "true" ]]; then
     local preview_cmd='
@@ -150,15 +151,15 @@ fzf_with_options() {
       '
 
     if [[ "$use_colors" == "true" ]]; then
-      fzf --ansi --exit-0 --with-nth=1,2,3,5 --preview "$preview_cmd"
+      fzf --ansi --exit-0 --prompt "$prompt" --with-nth=1,2,3,5 --preview "$preview_cmd" --preview-window=right:40%
     else
-      fzf --exit-0 --with-nth=1,2,3,5 --preview "$preview_cmd"
+      fzf --exit-0 --prompt "$prompt" --with-nth=1,2,3,5 --preview "$preview_cmd" --preview-window=right:40%
     fi
   else
     if [[ "$use_colors" == "true" ]]; then
-      fzf --ansi --exit-0 --with-nth=1,2,3,5
+      fzf --ansi --exit-0 --prompt "$prompt" --with-nth=1,2,3,5
     else
-      fzf --exit-0 --with-nth=1,2,3,5
+      fzf --exit-0 --prompt "$prompt" --with-nth=1,2,3,5
     fi
   fi
 }

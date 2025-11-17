@@ -105,9 +105,11 @@ done <<<"$WINDOW_LIST"
 
 FORMATED_WINDOW_LIST=$(echo "$FORMATED_WINDOW_LIST" | column -t -s "${DEL}")
 
+prompt="window > "
+
 if [[ "$PREVIEW" == "true" ]]; then
   SELECTION=$(
-    echo "$FORMATED_WINDOW_LIST" | fzf --ansi --exit-0 \
+    echo "$FORMATED_WINDOW_LIST" | fzf --ansi --exit-0 --prompt "$prompt" \
       --preview '
             sess=$(echo {} | awk "{print \$1}" | sed "s/^@//")
             win=$(echo {} | awk "{print \$2}" | sed "s/^#//")
@@ -117,7 +119,7 @@ if [[ "$PREVIEW" == "true" ]]; then
       --preview-window=top:50%
   ) || exit 0
 else
-  SELECTION=$(echo "$FORMATED_WINDOW_LIST" | fzf --ansi --exit-0) || exit 0
+  SELECTION=$(echo "$FORMATED_WINDOW_LIST" | fzf --ansi --exit-0 --prompt "$prompt") || exit 0
 fi
 
 while IFS=" " read -r session window _rest; do
