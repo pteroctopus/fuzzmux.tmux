@@ -73,12 +73,15 @@ fi
 # Source scripts
 source "$(dirname "$0")/colors.sh"
 
-FORMAT="#{session_name}|#{session_windows}|#{session_attached}|#{session_created}"
+# Delimiter for parsing
+DEL=$'\t'
+
+FORMAT="#{session_name}${DEL}#{session_windows}${DEL}#{session_attached}${DEL}#{session_created}"
 
 SESSION_LIST=$(tmux list-sessions -F "$FORMAT")
 
 FORMATTED_SESSION_LIST=""
-while IFS='|' read -r session windows attached created; do
+while IFS="${DEL}" read -r session windows attached created; do
   attached_marker=""
   [[ "$attached" != "0" ]] && attached_marker="*"
 
@@ -89,13 +92,13 @@ while IFS='|' read -r session windows attached created; do
   created_date=$(date -r "$created" "+%Y-%m-%d %H:%M" 2>/dev/null || echo "")
 
   if [[ "$USE_COLORS" == "true" ]]; then
-    FORMATTED_SESSION_LIST+="$(pick_color "$session")@${session}${COLORS[reset]} ${windows} windows ${created_date} ${window_names} ${attached_marker}"$'\n'
+    FORMATTED_SESSION_LIST+="$(pick_color "$session")@${session}${COLORS[reset]}${DEL}windows:${windows}${DEL}${created_date}${DEL}${window_names}${DEL}${attached_marker}"$'\n'
   else
-    FORMATTED_SESSION_LIST+="@${session} ${windows} windows ${created_date} ${window_names} ${attached_marker}"$'\n'
+    FORMATTED_SESSION_LIST+="@${session}${DEL}windows:${windows}${DEL}${created_date}${DEL}${window_names}${DEL}${attached_marker}"$'\n'
   fi
 done <<<"$SESSION_LIST"
 
-FORMATTED_SESSION_LIST=$(echo "$FORMATTED_SESSION_LIST" | column -t -s ' ')
+FORMATTED_SESSION_LIST=$(echo "$FORMATTED_SESSION_LIST" | column -t -s "${DEL}")
 
 if [[ "$PREVIEW" == "true" ]]; then
   SELECTION=$(

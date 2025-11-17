@@ -73,17 +73,20 @@ fi
 # Source scripts
 source "$(dirname "$0")/colors.sh"
 
-FORMAT="#{session_name}|#{window_index}|#{window_name}|#{window_panes}|#{window_active}|#{session_attached}"
+# Delimiter for parsing
+DEL=$'\t'
+
+FORMAT="#{session_name}${DEL}#{window_index}${DEL}#{window_name}${DEL}#{window_panes}${DEL}#{window_active}${DEL}#{session_attached}"
 
 WINDOW_LIST=$(tmux list-windows -a -F "$FORMAT")
 
 # Get current session and window to mark the truly active window
-CURRENT_INFO=$(tmux display-message -p '#{session_name} #{window_index}')
-CURRENT_SESSION=$(echo "$CURRENT_INFO" | cut -d' ' -f1)
-CURRENT_WINDOW=$(echo "$CURRENT_INFO" | cut -d' ' -f2)
+CURRENT_INFO=$(tmux display-message -p "#{session_name}${DEL}#{window_index}")
+CURRENT_SESSION=$(echo "$CURRENT_INFO" | cut -d"${DEL}" -f1)
+CURRENT_WINDOW=$(echo "$CURRENT_INFO" | cut -d"${DEL}" -f2)
 
 FORMATED_WINDOW_LIST=""
-while IFS='|' read -r session window name panes active attached; do
+while IFS="${DEL}" read -r session window name panes active attached; do
   active_marker=""
   # Only mark as active if it's the active window in the currently attached session
   if [[ "$active" == "1" && "$attached" != "0" && "$session" == "$CURRENT_SESSION" && "$window" == "$CURRENT_WINDOW" ]]; then
@@ -94,13 +97,13 @@ while IFS='|' read -r session window name panes active attached; do
   pane_commands=$(tmux list-panes -t "${session}:${window}" -F "#{pane_current_command}" | paste -sd "," -)
 
   if [[ "$USE_COLORS" == "true" ]]; then
-    FORMATED_WINDOW_LIST+="$(pick_color "$session" "$window")@${session} #${window}${COLORS[reset]} ${name} (${panes} panes) ${pane_commands} ${active_marker}"$'\n'
+    FORMATED_WINDOW_LIST+="$(pick_color "$session" "$window")@${session}${DEL}#${window}${COLORS[reset]}${DEL}${name}${DEL}panes:${panes}${DEL}${pane_commands}${DEL}${active_marker}"$'\n'
   else
-    FORMATED_WINDOW_LIST+="@${session} #${window} ${name} (${panes} panes) ${pane_commands} ${active_marker}"$'\n'
+    FORMATED_WINDOW_LIST+="@${session}${DEL}#${window}${DEL}${name}${DEL}panes:${panes}${DEL}${pane_commands}${DEL}${active_marker}"$'\n'
   fi
 done <<<"$WINDOW_LIST"
 
-FORMATED_WINDOW_LIST=$(echo "$FORMATED_WINDOW_LIST" | column -t -s ' ')
+FORMATED_WINDOW_LIST=$(echo "$FORMATED_WINDOW_LIST" | column -t -s "${DEL}")
 
 if [[ "$PREVIEW" == "true" ]]; then
   SELECTION=$(

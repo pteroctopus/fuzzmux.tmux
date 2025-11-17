@@ -73,25 +73,28 @@ fi
 # Source scripts
 source "$(dirname "$0")/colors.sh"
 
-FORMAT="#{session_name}|#{window_index}|#{pane_index}|#{pane_id}|#{pane_current_command}|#{pane_title}|#{=|-40|…;s|$HOME|~|:pane_current_path}"
+# Delimiter for parsing
+DEL=$'\t'
+
+FORMAT="#{session_name}${DEL}#{window_index}${DEL}#{pane_index}${DEL}#{pane_id}${DEL}#{pane_current_command}${DEL}#{pane_title}${DEL}#{=|-40|…;s|$HOME|~|:pane_current_path}"
 
 PANE_LIST=$(tmux list-panes -a -F "$FORMAT")
 
 FORMATED_PANE_LIST=""
-while IFS='|' read -r session window pane pane_id command title path; do
+while IFS="${DEL}" read -r session window pane pane_id command title path; do
   var_name="FUZZMUX_CURRENT_FILE_${pane_id}"
   nvim_file=$(tmux show-environment -g "$var_name" 2>/dev/null | cut -d= -f2- || echo "")
   nvim_file=${nvim_file#\'}
   nvim_file=${nvim_file%\'}
   nvim_file="${nvim_file/#$HOME/\~}"
   if [[ "$USE_COLORS" == "true" ]]; then
-    FORMATED_PANE_LIST+="$(pick_color "$session" "$window")@${session} #${window} %${pane}${COLORS[reset]} ${command} ${title} ${path} ${nvim_file}"$'\n'
+    FORMATED_PANE_LIST+="$(pick_color "$session" "$window")@${session}${DEL}#${window}${DEL}%${pane}${COLORS[reset]}${DEL}${command}${DEL}${title}${DEL}${path}${DEL}${nvim_file}"$'\n'
   else
-    FORMATED_PANE_LIST+="@${session} #${window} %${pane} ${command} ${title} ${path} ${nvim_file}"$'\n'
+    FORMATED_PANE_LIST+="@${session}${DEL}#${window}${DEL}%${pane}${DEL}${command}${DEL}${title}${DEL}${path}${DEL}${nvim_file}"$'\n'
   fi
 done <<<"$PANE_LIST"
 
-FORMATED_PANE_LIST=$(echo "$FORMATED_PANE_LIST" | column -t -s ' ')
+FORMATED_PANE_LIST=$(echo "$FORMATED_PANE_LIST" | column -t -s "${DEL}")
 
 if [[ "$PREVIEW" == "true" ]]; then
   SELECTION=$(

@@ -83,6 +83,9 @@ fi
 # Source scripts
 source "$(dirname "$0")/colors.sh"
 
+# Delimiter for parsing
+DEL=$'\t'
+
 # Get all FUZZMUX_OPEN_FILES_* variables
 ENV_VARS=$(tmux show-environment -g 2>/dev/null | grep "^FUZZMUX_OPEN_FILES_" || true)
 
@@ -100,12 +103,12 @@ while IFS='=' read -r var_name files; do
   parts="${var_name#FUZZMUX_OPEN_FILES_}"
   pane_id=$(echo "$parts" | cut -d= -f1)
 
-  coords=$(tmux display-message -p -t "$pane_id" '#{session_name}:#{window_index}:#{pane_index}:#{pane_id}')
+  coords=$(tmux display-message -p -t "$pane_id" "#{session_name}${DEL}#{window_index}${DEL}#{pane_index}${DEL}#{pane_id}")
 
-  session=$(echo "$coords" | cut -d: -f1)
-  window=$(echo "$coords" | cut -d: -f2)
-  pane=$(echo "$coords" | cut -d: -f3)
-  pane_id=$(echo "$coords" | cut -d: -f4)
+  session=$(echo "$coords" | cut -d"${DEL}" -f1)
+  window=$(echo "$coords" | cut -d"${DEL}" -f2)
+  pane=$(echo "$coords" | cut -d"${DEL}" -f3)
+  pane_id=$(echo "$coords" | cut -d"${DEL}" -f4)
 
   # Split files by colon and create one line per file
   IFS=':' read -ra PATHS <<<"$files"
@@ -114,9 +117,9 @@ while IFS='=' read -r var_name files; do
       # Replace home directory with ~
       display_path="${filepath/#$HOME/\~}"
       if [[ "$USE_COLORS" == "true" ]]; then
-        FILE_LIST+="$(pick_color "$session" "$window")@${session} #${window} %${pane} i:${pane_id}${COLORS[reset]} ${display_path}"$'\n'
+        FILE_LIST+="$(pick_color "$session" "$window")@${session}${DEL}#${window}${DEL}%${pane}${DEL}i:${pane_id}${COLORS[reset]}${DEL}${display_path}"$'\n'
       else
-        FILE_LIST+="@${session} #${window} %${pane} i:${pane_id} ${display_path}"$'\n'
+        FILE_LIST+="@${session}${DEL}#${window}${DEL}%${pane}${DEL}i:${pane_id}${DEL}${display_path}"$'\n'
       fi
     fi
   done
@@ -129,7 +132,7 @@ if [[ -z "$FILE_LIST" ]]; then
 fi
 
 # Format with columns
-FORMATTED_LIST=$(echo "$FILE_LIST" | column -t -s ' ')
+FORMATTED_LIST=$(echo "$FILE_LIST" | column -t -s "${DEL}")
 
 fzf_with_options() {
   local use_colors="${1:-false}"
