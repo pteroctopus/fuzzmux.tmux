@@ -176,9 +176,9 @@ Without fuzzmux.nvim, the buffer switcher (`prefix` + <kbd>f</kbd>) will display
 Press `prefix` + <kbd>s</kbd> to open the session switcher. You'll see a list like:
 
 ```
-s0        3 windows  2025-11-14 09:30  editor,server,logs    *
-s1        2 windows  2025-11-14 08:15  docker,monitoring
-sproject  5 windows  2025-11-13 14:22  main,test,build,docs,debug
+@0        3 windows  2025-11-14 09:30  editor,server,logs    *
+@1        2 windows  2025-11-14 08:15  docker,monitoring
+@project  5 windows  2025-11-13 14:22  main,test,build,docs,debug
 ```
 
 The `*` indicates the currently attached session. The preview window shows all windows in the session.
@@ -193,9 +193,9 @@ The `*` indicates the currently attached session. The preview window shows all w
 Press `prefix` + <kbd>p</kbd> to open the pane switcher. You'll see a list like:
 
 ```
-s0 w0 p0  zsh      ~              ~/Development/project
-s0 w0 p1  nvim     main.go        ~/Development/project
-s1 w2 p0  zsh      docker-comp... ~/Development/other
+@0 #0 %0  zsh      ~/Development/project    ~/Development/project/README.md
+@0 #0 %1  nvim     ~/Development/project    ~/Development/project/main.go
+@1 #2 %0  zsh      ~/Development/project    ~/Development/other/docker-compose.yml
 ```
 
 - Type to fuzzy search
@@ -208,9 +208,9 @@ s1 w2 p0  zsh      docker-comp... ~/Development/other
 Press `prefix` + <kbd>w</kbd> to open the window switcher:
 
 ```
-s0 w0  editor    (3 panes)  zsh,nvim,zsh  *
-s0 w1  server    (1 panes)  node
-s1 w0  database  (2 panes)  psql,zsh
+@0 #0  nvim      (3 panes)  zsh,nvim,zsh  *
+@0 #1  server    (1 panes)  node
+@1 #0  database  (2 panes)  psql,zsh
 ```
 
 The `*` indicates the currently active window.
@@ -220,15 +220,14 @@ The `*` indicates the currently active window.
 Press `prefix` + <kbd>f</kbd> to switch between Neovim buffers across all panes:
 
 ```
-s0 w0 p1  ~/Development/project/main.go
-s0 w0 p1  ~/Development/project/utils.go
-s1 w2 p0  ~/Development/other/config.yaml
+@0 #0 %1  ~/Development/project/main.go
+@0 #0 %1  ~/Development/project/utils.go
+@1 #2 %0  ~/Development/other/config.yaml
 ```
 
 When you select a buffer:
 1. tmux switches to the correct session, window, and pane
-2. If Neovim is suspended, it's automatically resumed
-3. The selected buffer is opened in Neovim
+2. The selected buffer is opened in Neovim
 
 ## Troubleshooting
 
