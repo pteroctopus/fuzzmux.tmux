@@ -96,11 +96,11 @@ done <<<"$PANE_LIST"
 
 FORMATED_PANE_LIST=$(echo "$FORMATED_PANE_LIST" | column -t -s "${DEL}")
 
-prompt="pane > "
+PROMPT="pane > "
 
 if [[ "$PREVIEW" == "true" ]]; then
   SELECTION=$(
-    echo "$FORMATED_PANE_LIST" | fzf --ansi --exit-0 --prompt "$prompt" \
+    echo "$FORMATED_PANE_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT" \
       --preview '
             sess=$(echo {} | awk "{print \$1}" | sed "s/^@//")
             win=$(echo {} | awk "{print \$2}" | sed "s/^#//")
@@ -115,7 +115,7 @@ if [[ "$PREVIEW" == "true" ]]; then
       --preview-window=top:50%
   ) || exit 0
 else
-  SELECTION=$(echo "$FORMATED_PANE_LIST" | fzf --ansi --exit-0 --prompt "$prompt") || exit 0
+  SELECTION=$(echo "$FORMATED_PANE_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT") || exit 0
 fi
 
 while IFS=" " read -r session window pane _rest; do

@@ -100,10 +100,10 @@ done <<<"$SESSION_LIST"
 
 FORMATTED_SESSION_LIST=$(echo "$FORMATTED_SESSION_LIST" | column -t -s "${DEL}")
 
-prompt="session > "
+PROMPT="session > "
 if [[ "$PREVIEW" == "true" ]]; then
   SELECTION=$(
-    echo "$FORMATTED_SESSION_LIST" | fzf --ansi --exit-0 --prompt "$prompt" \
+    echo "$FORMATTED_SESSION_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT" \
       --preview '
             sess=$(echo {} | awk "{print \$1}" | sed "s/^@//")
             tmux list-windows -t "${sess}" -F "#{window_index}: #{window_name} (#{window_panes} panes) #{window_active}" | \
@@ -121,7 +121,7 @@ if [[ "$PREVIEW" == "true" ]]; then
       --preview-window=right:40%
   ) || exit 0
 else
-  SELECTION=$(echo "$FORMATTED_SESSION_LIST" | fzf --ansi --exit-0 --prompt "$prompt") || exit 0
+  SELECTION=$(echo "$FORMATTED_SESSION_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT") || exit 0
 fi
 
 while IFS=" " read -r session _rest; do
