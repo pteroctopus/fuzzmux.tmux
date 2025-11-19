@@ -21,9 +21,10 @@ https://github.com/user-attachments/assets/76bac81f-d7ae-45ee-8a54-c00b87e01103
 
 ## Requirements
 
-- **tmux** >= 3.2 (required for `display-popup`)
+- **tmux** (required)
 - **fzf** (required) - [Installation instructions](https://github.com/junegunn/fzf#installation)
 - **bat** (optional) - For enhanced file previews in Neovim buffer switcher
+- **column** (required) - For better formatting of lists
 - **fuzzmux.nvim** (optional but HIGHLY recommended) - Required for Neovim buffer tracking functionality
 
 ## Installation
@@ -47,7 +48,7 @@ git clone https://github.com/pteroctopus/fuzzmux.tmux ~/.tmux/plugins/fuzzmux.tm
 Add to `~/.tmux.conf`:
 
 ```tmux
-run-shell ~/.tmux/plugins/fuzzmux.tmux/scripts/init.sh
+run-shell ~/.tmux/plugins/fuzzmux.tmux/plugin.tmux
 ```
 
 Reload tmux config:
@@ -79,20 +80,14 @@ With default settings, the following keybindings are available (after pressing y
 Add these to your `~/.tmux.conf` to customize the plugin:
 
 ```tmux
-# Disable the plugin entirely
-set -g @fuzzmux-enabled '0'
-
-# Disable default key bindings (if you want to set custom ones)
-set -g @fuzzmux-default-bindings '0'
-
-# Disable preview windows
-set -g @fuzzmux-preview-enabled '0'
+# Disable key bindings (if you want to set custom ones with bind-key)
+set -g @fuzzmux-enable-bindings '0'
 
 # Disable colorized output
 set -g @fuzzmux-colors-enabled '0'
 ```
 
-**Note:** When disabling the plugin or default bindings, fuzzmux will unbind its keybindings. If you had tmux default bindings on those keys (like `prefix + f` for find-window), they won't be automatically restored. To restore tmux defaults, restart tmux or manually rebind them in your `.tmux.conf`.
+**Note:** When disabling default bindings, fuzzmux will unbind its keybindings. If you had tmux default bindings on those keys (like `prefix + f` for find-window), they won't be automatically restored. To restore tmux defaults, restart tmux or manually rebind them in your `.tmux.conf`.
 
 ### Feature Toggles
 
@@ -104,6 +99,12 @@ set -g @fuzzmux-session-enabled '0'   # Disable session switcher
 set -g @fuzzmux-pane-enabled '0'      # Disable pane switcher
 set -g @fuzzmux-window-enabled '0'    # Disable window switcher
 set -g @fuzzmux-nvim-enabled '0'      # Disable nvim buffer switcher
+
+# Disable preview for specific features (all enabled by default)
+set -g @fuzzmux-session-preview-enabled '0'
+set -g @fuzzmux-pane-preview-enabled '0'
+set -g @fuzzmux-window-preview-enabled '0'
+set -g @fuzzmux-nvim-preview-enabled '0'
 ```
 
 ### Popup Appearance
@@ -124,7 +125,7 @@ set -g @fuzzmux-popup-border-color 'cyan'
 
 ### Custom Key Bindings
 
-If you want different keybindings, you can customize them:
+Customize the default keybindings:
 
 ```tmux
 # Customize the default bindings (lowercase for normal, uppercase for zoom)
@@ -136,36 +137,59 @@ set -g @fuzzmux-bind-window 'w'         # prefix + w for windows
 set -g @fuzzmux-bind-window-zoom 'W'    # prefix + W for windows with zoom
 set -g @fuzzmux-bind-nvim 'f'           # prefix + f for nvim buffers
 set -g @fuzzmux-bind-nvim-zoom 'F'      # prefix + F for nvim buffers with zoom
+
+# Use '!' prefix for bindings without tmux prefix (e.g., Alt+key combinations)
+set -g @fuzzmux-bind-session '!M-s'      # Alt+s without prefix for sessions
+set -g @fuzzmux-bind-session-zoom '!M-S' # Alt+Shift+s without prefix for sessions with zoom
+set -g @fuzzmux-bind-pane '!M-p'         # Alt+p without prefix for panes
+set -g @fuzzmux-bind-pane-zoom '!M-P'    # Alt+Shift+p without prefix for panes with zoom
+set -g @fuzzmux-bind-window '!M-w'       # Alt+w without prefix for windows
+set -g @fuzzmux-bind-window-zoom '!M-W'  # Alt+Shift+w without prefix for windows with zoom
+set -g @fuzzmux-bind-nvim '!M-f'         # Alt+f without prefix for nvim buffers
+set -g @fuzzmux-bind-nvim-zoom '!M-F'    # Alt+Shift+f without prefix for nvim buffers with zoom
 ```
 
 Or set up completely custom bindings:
 
 ```tmux
 # Disable default bindings
-set -g @fuzzmux-default-bindings '0'
+set -g @fuzzmux-enable-bindings '0'
 
-# Custom bindings with specific options
-bind-key -n M-s run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_session_switcher.sh --preview --colors"
-bind-key -n M-S run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_session_switcher.sh --preview --colors --zoom"
-bind-key -n M-p run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_pane_switcher.sh --preview --colors"
-bind-key -n M-P run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_pane_switcher.sh --preview --colors --zoom"
-bind-key -n M-w run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_window_switcher.sh --preview --colors"
-bind-key -n M-W run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_window_switcher.sh --preview --colors --zoom"
-bind-key -n M-f run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_nvim_files.sh --preview --colors"
-bind-key -n M-F run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_nvim_files.sh --preview --colors --zoom"
+# Custom bindings (will use global popup and color settings)
+bind-key -n M-s run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_session_switcher.sh"
+bind-key -n M-S run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_session_switcher.sh --zoom"
+bind-key -n M-p run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_pane_switcher.sh"
+bind-key -n M-P run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_pane_switcher.sh --zoom"
+bind-key -n M-w run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_window_switcher.sh"
+bind-key -n M-W run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_window_switcher.sh --zoom"
+bind-key -n M-f run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_nvim_files.sh"
+bind-key -n M-F run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_nvim_files.sh --zoom"
 ```
+
+**Note:** When using custom bindings, the scripts respect global configuration settings (`@fuzzmux-popup-*`, `@fuzzmux-colors-enabled`, `@fuzzmux-<feature>-preview-enabled`) automatically.
 
 ### Command Line Options
 
-Each script accepts the following options:
+Each script accepts the following options when called manually:
 
 - `--preview` - Enable preview window
 - `--colors` - Enable colorized output
 - `--zoom` - Automatically zoom the selected pane/window
+- `--popup-width=<value>` - Set popup width (default: 90%)
+- `--popup-height=<value>` - Set popup height (default: 90%)
+- `--popup-border=<style>` - Set border style (default: rounded)
+- `--popup-color=<color>` - Set border color (default: green)
 
 ## Integration with fuzzmux.nvim
 
-To enable Neovim buffer tracking and switching, install [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim) in your Neovim configuration. The plugin will automatically detect and use the environment variables set by fuzzmux.nvim.
+To enable Neovim buffer tracking and switching, install [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim) in your Neovim configuration. The plugin communicates with Neovim using:
+
+1. **Environment variables** - fuzzmux.nvim sets tmux environment variables with buffer information:
+   - `FUZZMUX_OPEN_FILES_<pane_id>` - Colon-separated list of open file paths
+   - `FUZZMUX_CURRENT_FILE_<pane_id>` - Currently active file in the pane
+   - `FUZZMUX_NVIM_SOCKET_<pane_id>` - Neovim socket path for RPC communication
+
+2. **Neovim RPC** - fuzzmux.tmux uses the socket to send buffer switching commands directly to Neovim
 
 Without fuzzmux.nvim, the buffer switcher (`prefix` + <kbd>f</kbd>) will display a message that no buffers are found.
 
@@ -176,12 +200,12 @@ Without fuzzmux.nvim, the buffer switcher (`prefix` + <kbd>f</kbd>) will display
 Press `prefix` + <kbd>s</kbd> to open the session switcher. You'll see a list like:
 
 ```
-@0        3 windows  2025-11-14 09:30  editor,server,logs    *
-@1        2 windows  2025-11-14 08:15  docker,monitoring
-@project  5 windows  2025-11-13 14:22  main,test,build,docs,debug
+@0        windows:3  2025-11-14 09:30  editor,server,logs    *
+@1        windows:2  2025-11-14 08:15  docker,monitoring
+@project  windows:5  2025-11-13 14:22  main,test,build,docs,debug
 ```
 
-The `*` indicates the currently attached session. The preview window shows all windows in the session.
+The `*` indicates the currently attached session. With preview enabled, the preview window shows all windows in the session with an arrow (→) indicating the active window.
 
 - Type to fuzzy search
 - Use arrow keys to navigate
@@ -193,22 +217,24 @@ The `*` indicates the currently attached session. The preview window shows all w
 Press `prefix` + <kbd>w</kbd> to open the window switcher:
 
 ```
-@0 #0  nvim      (3 panes)  zsh,nvim,zsh  *
-@0 #1  server    (1 panes)  node
-@1 #0  database  (2 panes)  psql,zsh
+@0 #0  nvim      panes:3  zsh,nvim,zsh  *
+@0 #1  server    panes:1  node
+@1 #0  database  panes:2  psql,zsh
 ```
 
-The `*` indicates the currently active window.
+The `*` indicates the currently active window. With preview enabled, the preview window shows the content of the active pane in the selected window.
 
 ### Pane Switcher
 
 Press `prefix` + <kbd>p</kbd> to open the pane switcher. You'll see a list like:
 
 ```
-@0 #0 %0  zsh      ~/Development/project    ~/Development/project/README.md
-@0 #0 %1  nvim     ~/Development/project    ~/Development/project/main.go
-@1 #2 %0  zsh      ~/Development/project    ~/Development/other/docker-compose.yml
+@0 #0 %0  zsh      title1    ~/Development/project       ~/Development/project/README.md
+@0 #0 %1  nvim     title2    ~/Development/project       ~/Development/project/main.go
+@1 #2 %0  zsh      title3    ~/Development/other         ~/Development/other/config.yml
 ```
+
+The list shows: session, window, pane, command, title, current path, and current Neovim file (if fuzzmux.nvim is installed). With preview enabled, the preview shows pane content (last lines for shells, first lines for other commands).
 
 - Type to fuzzy search
 - Use arrow keys to navigate
@@ -220,14 +246,17 @@ Press `prefix` + <kbd>p</kbd> to open the pane switcher. You'll see a list like:
 Press `prefix` + <kbd>f</kbd> to switch between Neovim buffers across all panes:
 
 ```
-@0 #0 %1  ~/Development/project/main.go
-@0 #0 %1  ~/Development/project/utils.go
-@1 #2 %0  ~/Development/other/config.yaml
+@0 #0 %1  i:%5  ~/Development/project/main.go
+@0 #0 %1  i:%5  ~/Development/project/utils.go
+@1 #2 %0  i:%8  ~/Development/other/config.yaml
 ```
+
+The list shows: session, window, pane and file path. With preview enabled and `bat` installed, the preview shows syntax-highlighted file contents.
 
 When you select a buffer:
 1. tmux switches to the correct session, window, and pane
-2. The selected buffer is opened in Neovim
+2. fuzzmux.tmux sends a command via Neovim's RPC socket to open the selected buffer
+3. The selected buffer is opened in Neovim instantly
 
 ## Troubleshooting
 
@@ -284,20 +313,33 @@ sudo pacman -S bat
 
 ## How It Works
 
-### Environment Variables
+### Popup Architecture
 
-fuzzmux.nvim sets global tmux environment variables with information about open buffers:
+Each script follows a two-phase execution pattern:
+
+1. **Phase 1** - Initial call without `--run` flag:
+   - Parses configuration options
+   - Launches a tmux popup with `display-popup`
+   - Re-invokes itself inside the popup with `--run` flag
+
+2. **Phase 2** - Inside the popup with `--run` flag:
+   - Gathers data (sessions, windows, panes, or buffers)
+   - Formats and displays it in fzf
+   - Performs the switch action based on user selection
+
+This architecture allows the scripts to work both as keybindings and as standalone commands while maintaining consistent popup behavior.
+
+### Neovim Integration
+
+fuzzmux.nvim communicates with fuzzmux.tmux through tmux environment variables:
 
 ```bash
 FUZZMUX_OPEN_FILES_<pane_id>="file1.txt:file2.txt:file3.txt"
 FUZZMUX_CURRENT_FILE_<pane_id>="current_file.txt"
+FUZZMUX_NVIM_SOCKET_<pane_id>="/path/to/nvim.socket"
 ```
 
-fuzzmux.tmux reads these variables to display and switch between buffers.
-
-### Popup Windows
-
-The plugin uses tmux's `display-popup` feature to show an interactive fzf interface without disrupting your current layout.
+When switching buffers, fuzzmux.tmux uses Neovim's RPC socket to send buffer switching commands directly, providing instant and reliable buffer switching without relying on tmux send-keys.
 
 ## Related Projects
 
