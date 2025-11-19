@@ -123,7 +123,7 @@ if [[ "$(get_tmux_option '@fuzzmux-enable-bindings' '1')" == "1" ]]; then
   bind_feature session fzf_session_switcher.sh @fuzzmux-bind-session @fuzzmux-bind-session-zoom
   bind_feature pane fzf_pane_switcher.sh @fuzzmux-bind-pane @fuzzmux-bind-pane-zoom
   bind_feature window fzf_window_switcher.sh @fuzzmux-bind-window @fuzzmux-bind-window-zoom
-  bind_feature nvim fzf_nvim_files.sh @fuzzmux-bind-nvim @fuzzmux-bind-nvim-zoom
+  bind_feature nvim fzf_nvim_buffer_switcher.sh @fuzzmux-bind-nvim @fuzzmux-bind-nvim-zoom
 fi
 
 tmux display-message "fuzzmux.tmux: Plugin loaded successfully"
