@@ -17,7 +17,7 @@ Works with [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim) to track 
 - **Configurable** - Customize keybindings and behavior
 - **Feature toggles** - Enable/disable individual features as needed
 
-https://github.com/user-attachments/assets/76bac81f-d7ae-45ee-8a54-c00b87e01103
+https://github.com/user-attachments/assets/593dd544-7c35-41aa-b9ff-09fdce9b9b81
 
 ## Requirements
 
