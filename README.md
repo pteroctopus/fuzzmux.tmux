@@ -178,7 +178,7 @@ Each script accepts the following options when called manually:
 - `--popup-width=<value>` - Set popup width (default: 90%)
 - `--popup-height=<value>` - Set popup height (default: 90%)
 - `--popup-border=<style>` - Set border style (default: rounded)
-- `--popup-color=<color>` - Set border color (default: green)
+- `--popup-color=<color>` - Set border color (default: cyan)
 
 ## Integration with fuzzmux.nvim
 
