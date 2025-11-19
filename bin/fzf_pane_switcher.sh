@@ -112,7 +112,7 @@ if [[ "$PREVIEW" == "true" ]]; then
               tmux capture-pane -pt "${sess}:${win}.${pane}" -e | head -n "$FZF_PREVIEW_LINES"
             fi
         ' \
-      --preview-window=top:50%
+      --preview-window=top:40%
   ) || exit 0
 else
   SELECTION=$(echo "$FORMATED_PANE_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT") || exit 0

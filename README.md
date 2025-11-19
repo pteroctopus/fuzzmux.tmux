@@ -166,7 +166,7 @@ bind-key -n M-f run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_nvim_files.sh"
 bind-key -n M-F run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_nvim_files.sh --zoom"
 ```
 
-**Note:** When using custom bindings, the scripts respect global configuration settings (`@fuzzmux-popup-*`, `@fuzzmux-colors-enabled`, `@fuzzmux-<feature>-preview-enabled`) automatically.
+**Note:** When using custom bindings, the scripts **don't respect** global configuration settings (`@fuzzmux-popup-*`, `@fuzzmux-colors-enabled`, `@fuzzmux-<feature>-preview-enabled`) automatically. You need to add the desired options (`--preview`, `--colors`, `--zoom`, etc.) directly to the command.
 
 ### Command Line Options
 
@@ -178,7 +178,7 @@ Each script accepts the following options when called manually:
 - `--popup-width=<value>` - Set popup width (default: 90%)
 - `--popup-height=<value>` - Set popup height (default: 90%)
 - `--popup-border=<style>` - Set border style (default: rounded)
-- `--popup-color=<color>` - Set border color (default: cyan)
+- `--popup-color=<color>` - Set border color (default: green)
 
 ## Integration with fuzzmux.nvim
 

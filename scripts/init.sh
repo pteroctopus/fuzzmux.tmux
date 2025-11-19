@@ -40,7 +40,7 @@ done
 POPUP_ARGS=" --popup-width=$(get_tmux_option '@fuzzmux-popup-width' '90%')"
 POPUP_ARGS+=" --popup-height=$(get_tmux_option '@fuzzmux-popup-height' '90%')"
 POPUP_ARGS+=" --popup-border=$(get_tmux_option '@fuzzmux-popup-border-style' 'rounded')"
-POPUP_ARGS+=" --popup-color=$(get_tmux_option '@fuzzmux-popup-border-color' 'cyan')"
+POPUP_ARGS+=" --popup-color=$(get_tmux_option '@fuzzmux-popup-border-color' 'green')"
 
 declare -A FUZZMUX_DEFAULT_KEYS=(
   [session]=s
