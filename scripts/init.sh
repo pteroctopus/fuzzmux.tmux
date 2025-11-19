@@ -53,35 +53,70 @@ declare -A FUZZMUX_DEFAULT_KEYS=(
   [nvim-zoom]=F
 )
 
-# Bind keys for each enabled feature
+# Bind keys for each enabled feature (supports leading '!' marker for no-prefix binds)
 bind_feature() {
   local feature=$1 script=$2 key_opt=$3 key_zoom_opt=$4
 
+  # Feature enablement (default ON)
   [[ "$(get_tmux_option "@fuzzmux-${feature}-enabled" '1')" != "1" ]] && return
 
-  local key_name="${feature}"      # e.g. "session"
+  # Get configured/raw keys (raw preserves marker '!' if present)
+  local key_name="${feature}"
   local default_key="${FUZZMUX_DEFAULT_KEYS[$key_name]}"
-  local key="$(get_tmux_option "$key_opt" "$default_key")"
+  local key_raw
+  key_raw="$(get_tmux_option "$key_opt" "$default_key")"
 
   local key_zoom_name="${feature}-zoom"
   local default_key_zoom="${FUZZMUX_DEFAULT_KEYS[$key_zoom_name]}"
-  local key_zoom="$(get_tmux_option "$key_zoom_opt" "$default_key_zoom")"
+  local key_zoom_raw
+  key_zoom_raw="$(get_tmux_option "$key_zoom_opt" "$default_key_zoom")"
 
-  # guard: invalid/empty keys
-  if [[ -z "$key" || -z "$key_zoom" ]]; then
-    return
+  # Sanity: must have a value (raw may include leading '!')
+  [[ -z "$key_raw" || -z "$key_zoom_raw" ]] && return
+
+  # Detect marker '!' meaning "bind without prefix" and strip it for the real tmux token
+  local key_prefixless=false
+  local key_zoom_prefixless=false
+  local key key_zoom
+
+  if [[ "${key_raw}" == \!* ]]; then
+    key_prefixless=true
+    key="${key_raw:1}"
+  else
+    key="$key_raw"
   fi
 
-  # Build feature-specific arguments
-  local args="${POPUP_ARGS}"
+  if [[ "${key_zoom_raw}" == \!* ]]; then
+    key_zoom_prefixless=true
+    key_zoom="${key_zoom_raw:1}"
+  else
+    key_zoom="$key_zoom_raw"
+  fi
+
+  # After stripping marker, still must be non-empty
+  [[ -z "$key" || -z "$key_zoom" ]] && return
+
+  # Build feature-specific arguments (ensure POPUP_ARGS default)
+  local args="${POPUP_ARGS:-}"
   [[ "$(get_tmux_option "@fuzzmux-${feature}-preview-enabled" '1')" == "1" ]] && args+=" --preview"
   [[ "$(get_tmux_option '@fuzzmux-colors-enabled' '1')" == "1" ]] && args+=" --colors"
 
-  tmux bind-key "$key" run-shell "${PLUGIN_DIR}/bin/${script}${args}"
-  tmux bind-key "$key_zoom" run-shell "${PLUGIN_DIR}/bin/${script}${args} --zoom"
+  # Perform binds: prefix (default) or no-prefix (-n)
+  if $key_prefixless; then
+    tmux bind-key -n "$key" run-shell "${PLUGIN_DIR}/bin/${script}${args}"
+  else
+    tmux bind-key "$key" run-shell "${PLUGIN_DIR}/bin/${script}${args}"
+  fi
 
-  tmux set-option -g "@fuzzmux-prev-bind-${feature}" "$key"
-  tmux set-option -g "@fuzzmux-prev-bind-${feature}-zoom" "$key_zoom"
+  if $key_zoom_prefixless; then
+    tmux bind-key -n "$key_zoom" run-shell "${PLUGIN_DIR}/bin/${script}${args} --zoom"
+  else
+    tmux bind-key "$key_zoom" run-shell "${PLUGIN_DIR}/bin/${script}${args} --zoom"
+  fi
+
+  # Remember previous binds (store raw so marker is visible)
+  tmux set-option -g "@fuzzmux-prev-bind-${feature}" "$key_raw"
+  tmux set-option -g "@fuzzmux-prev-bind-${feature}-zoom" "$key_zoom_raw"
 }
 
 if [[ "$(get_tmux_option '@fuzzmux-enable-bindings' '1')" == "1" ]]; then
