@@ -20,6 +20,8 @@ POPUP_WIDTH="90%"
 POPUP_HEIGHT="90%"
 POPUP_BORDER="rounded"
 POPUP_COLOR="green"
+COLOR_PALETTE=""
+
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -51,6 +53,10 @@ while [[ $# -gt 0 ]]; do
     POPUP_COLOR="${1#*=}"
     shift
     ;;
+  --color-palette=*)
+    COLOR_PALETTE="${1#*=}"
+    shift
+    ;;
   --run)
     break
     ;;
@@ -69,6 +75,7 @@ if [[ "${1:-}" != "--run" ]]; then
   ARGS+=" --popup-height=$POPUP_HEIGHT"
   ARGS+=" --popup-border=$POPUP_BORDER"
   ARGS+=" --popup-color=$POPUP_COLOR"
+  ARGS+=" --color-palette=$COLOR_PALETTE"
 
   tmux display-popup -S \
     "fg=${POPUP_COLOR}" \
@@ -81,7 +88,10 @@ if [[ "${1:-}" != "--run" ]]; then
 fi
 
 # Source scripts
-source "$(dirname "$0")/colors.sh"
+# FUZZMUX_COLORS="#ff0000,#00ff00,#0000ff,#0ff0ac"
+# FUZZMUX_COLORS="#eb6f92,#f6c177,#9ccfd8,#c4a7e7,#31748f,#ebbcba,#e0def4,#26233a,#403d52,#524f67,#3e8fb0,#c98bbf,#d7827e,#f0cdac,#e5b4c7,#b9c7d5,#7f849c,#524f67,#6e6a86,#908caa,#a4a1b6,#c5c3d0,#1f1d2e,#2a2837,#342f44,#4a475a,#5b567b,#6c6783,#7d7291,#8e7ca2,#a58bb0,#b89cc6,#cea9d8,#f0d9ff,#f7e2d2,#ffd9df,#ffced6,#ffc5cc,#e8b7c1,#dba6b0,#c3949e,#b28395,#a07289,#8e627c,#7c516e,#6b3f5f,#593051,#472243,#351535"
+source "$(dirname "$0")/colors.sh" "$COLOR_PALETTE"
+# source "$(dirname "$0")/colors.sh"
 
 # Delimiter for parsing
 DEL=$'\t'
@@ -117,7 +127,7 @@ while IFS='=' read -r var_name files; do
       # Replace home directory with ~
       display_path="${filepath/#$HOME/\~}"
       if [[ "$USE_COLORS" == "true" ]]; then
-        FILE_LIST+="$(pick_color "$session" "$window")@${session}${DEL}#${window}${DEL}%${pane}${DEL}i:${pane_id}${COLORS[reset]}${DEL}${display_path}"$'\n'
+        FILE_LIST+="$(pick_color "$session" "$window")@${session}${DEL}#${window}${DEL}%${pane}${DEL}i:${pane_id}${RESET}${DEL}${display_path}"$'\n'
       else
         FILE_LIST+="@${session}${DEL}#${window}${DEL}%${pane}${DEL}i:${pane_id}${DEL}${display_path}"$'\n'
       fi

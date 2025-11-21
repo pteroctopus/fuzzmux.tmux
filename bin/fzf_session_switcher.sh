@@ -20,6 +20,7 @@ POPUP_WIDTH="90%"
 POPUP_HEIGHT="90%"
 POPUP_BORDER="rounded"
 POPUP_COLOR="green"
+COLOR_PALETTE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -51,6 +52,10 @@ while [[ $# -gt 0 ]]; do
     POPUP_COLOR="${1#*=}"
     shift
     ;;
+  --color-palette=*)
+    COLOR_PALETTE="${1#*=}"
+    shift
+    ;;
   --run)
     break
     ;;
@@ -66,12 +71,13 @@ if [[ "${1:-}" != "--run" ]]; then
   [[ "$USE_COLORS" == "true" ]] && ARGS+=" --colors"
   [[ "$PREVIEW" == "true" ]] && ARGS+=" --preview"
   ARGS+=" --popup-width=$POPUP_WIDTH --popup-height=$POPUP_HEIGHT --popup-border=$POPUP_BORDER --popup-color=$POPUP_COLOR"
+  ARGS+=" --color-palette=$COLOR_PALETTE"
   tmux display-popup -S "fg=${POPUP_COLOR}" -b "${POPUP_BORDER}" -T "Find tmux session" -w "${POPUP_WIDTH}" -h "${POPUP_HEIGHT}" -E "$0$ARGS --run"
   exit 0
 fi
 
 # Source scripts
-source "$(dirname "$0")/colors.sh"
+source "$(dirname "$0")/colors.sh" "$COLOR_PALETTE"
 
 # Delimiter for parsing
 DEL=$'\t'
@@ -92,7 +98,7 @@ while IFS="${DEL}" read -r session windows attached created; do
   created_date=$(date -r "$created" "+%Y-%m-%d %H:%M" 2>/dev/null || echo "")
 
   if [[ "$USE_COLORS" == "true" ]]; then
-    FORMATTED_SESSION_LIST+="$(pick_color "$session")@${session}${COLORS[reset]}${DEL}windows:${windows}${DEL}${created_date}${DEL}${window_names}${DEL}${attached_marker}"$'\n'
+    FORMATTED_SESSION_LIST+="$(pick_color "$session")@${session}${RESET}${DEL}windows:${windows}${DEL}${created_date}${DEL}${window_names}${DEL}${attached_marker}"$'\n'
   else
     FORMATTED_SESSION_LIST+="@${session}${DEL}windows:${windows}${DEL}${created_date}${DEL}${window_names}${DEL}${attached_marker}"$'\n'
   fi

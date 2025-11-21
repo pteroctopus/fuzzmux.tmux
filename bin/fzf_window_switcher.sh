@@ -20,6 +20,7 @@ POPUP_WIDTH="90%"
 POPUP_HEIGHT="90%"
 POPUP_BORDER="rounded"
 POPUP_COLOR="green"
+COLOR_PALETTE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -51,6 +52,10 @@ while [[ $# -gt 0 ]]; do
     POPUP_COLOR="${1#*=}"
     shift
     ;;
+  --color-palette=*)
+    COLOR_PALETTE="${1#*=}"
+    shift
+    ;;
   --run)
     break
     ;;
@@ -66,12 +71,13 @@ if [[ "${1:-}" != "--run" ]]; then
   [[ "$USE_COLORS" == "true" ]] && ARGS+=" --colors"
   [[ "$PREVIEW" == "true" ]] && ARGS+=" --preview"
   ARGS+=" --popup-width=$POPUP_WIDTH --popup-height=$POPUP_HEIGHT --popup-border=$POPUP_BORDER --popup-color=$POPUP_COLOR"
+  ARGS+=" --color-palette=$COLOR_PALETTE"
   tmux display-popup -S "fg=${POPUP_COLOR}" -b "${POPUP_BORDER}" -T "Find tmux window" -w "${POPUP_WIDTH}" -h "${POPUP_HEIGHT}" -E "$0$ARGS --run"
   exit 0
 fi
 
 # Source scripts
-source "$(dirname "$0")/colors.sh"
+source "$(dirname "$0")/colors.sh" "$COLOR_PALETTE"
 
 # Delimiter for parsing
 DEL=$'\t'
@@ -97,7 +103,7 @@ while IFS="${DEL}" read -r session window name panes active attached; do
   pane_commands=$(tmux list-panes -t "${session}:${window}" -F "#{pane_current_command}" | paste -sd "," -)
 
   if [[ "$USE_COLORS" == "true" ]]; then
-    FORMATED_WINDOW_LIST+="$(pick_color "$session" "$window")@${session}${DEL}#${window}${COLORS[reset]}${DEL}${name}${DEL}panes:${panes}${DEL}${pane_commands}${DEL}${active_marker}"$'\n'
+    FORMATED_WINDOW_LIST+="$(pick_color "$session")@${session}${DEL}#${window}${RESET}${DEL}${name}${DEL}panes:${panes}${DEL}${pane_commands}${DEL}${active_marker}"$'\n'
   else
     FORMATED_WINDOW_LIST+="@${session}${DEL}#${window}${DEL}${name}${DEL}panes:${panes}${DEL}${pane_commands}${DEL}${active_marker}"$'\n'
   fi

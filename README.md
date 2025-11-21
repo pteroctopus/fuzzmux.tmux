@@ -83,11 +83,19 @@ Add these to your `~/.tmux.conf` to customize the plugin:
 # Disable key bindings (if you want to set custom ones with bind-key)
 set -g @fuzzmux-enable-bindings '0'
 
-# Disable colorized output
+# Disable colorized output (colors are enabled by default)
 set -g @fuzzmux-colors-enabled '0'
+
+# Custom color palette (optional - uses terminal colors by default)
+set -g @fuzzmux-color-palette '#eb6f92,#f6c177,#9ccfd8,#c4a7e7,#31748f,#ebbcba'
 ```
 
-**Note:** When disabling default bindings, fuzzmux will unbind its keybindings. If you had tmux default bindings on those keys (like `prefix + f` for find-window), they won't be automatically restored. To restore tmux defaults, restart tmux or manually rebind them in your `.tmux.conf`.
+**Notes:**
+- When disabling default bindings, fuzzmux will unbind its keybindings. If you had tmux default bindings on those keys (like `prefix + f` for find-window), they won't be automatically restored. To restore tmux defaults, restart tmux or manually rebind them in your `.tmux.conf`.
+- If `@fuzzmux-color-palette` is enabled and then removed from `.tmux.conf`, you need to manually unset it from tmux to return to defaults, or add this line to your `.tmux.conf` before loading the plugin:
+  ```tmux
+  set -gu @fuzzmux-color-palette
+  ```
 
 ### Feature Toggles
 
@@ -122,6 +130,27 @@ set -g @fuzzmux-popup-border-style 'rounded'
 # Change border color (any tmux color name)
 set -g @fuzzmux-popup-border-color 'cyan'
 ```
+
+### Color Customization
+
+Customize the color palette used for session/window identifiers:
+
+```tmux
+# Use custom color palette (HTML hex color codes, comma-separated)
+# If not set, uses terminal's default color scheme
+
+# Examples:
+# Rose Pine colors
+set -g @fuzzmux-color-palette '#eb6f92,#f6c177,#9ccfd8,#c4a7e7,#31748f,#ebbcba'
+
+# Catppuccin Mocha colors
+set -g @fuzzmux-color-palette '#f38ba8,#a6e3a1,#f9e2af,#89b4fa,#cba6f7,#94e2d5'
+
+# Tokyo Night colors
+set -g @fuzzmux-color-palette '#f7768e,#9ece6a,#e0af68,#7aa2f7,#bb9af7,#7dcfff'
+```
+
+**Note:** When `@fuzzmux-color-palette` is not set or is empty, fuzzmux uses your terminal's default ANSI colors (red, green, yellow, blue, magenta, cyan), which automatically adapt to your terminal's color scheme.
 
 ### Custom Key Bindings
 
@@ -179,6 +208,15 @@ Each script accepts the following options when called manually:
 - `--popup-height=<value>` - Set popup height (default: 90%)
 - `--popup-border=<style>` - Set border style (default: rounded)
 - `--popup-color=<color>` - Set border color (default: green)
+- `--color-palette=<colors>` - Set custom color palette (comma-separated hex colors)
+
+Example with custom colors:
+```bash
+~/.tmux/plugins/fuzzmux.tmux/bin/fzf_session_switcher.sh \
+  --colors \
+  --preview \
+  --color-palette='#ff0000,#00ff00,#0000ff'
+```
 
 ## Integration with fuzzmux.nvim
 

@@ -100,6 +100,9 @@ bind_feature() {
   local args="${POPUP_ARGS:-}"
   [[ "$(get_tmux_option "@fuzzmux-${feature}-preview-enabled" '1')" == "1" ]] && args+=" --preview"
   [[ "$(get_tmux_option '@fuzzmux-colors-enabled' '1')" == "1" ]] && args+=" --colors"
+  local palette
+  palette="$(get_tmux_option '@fuzzmux-color-palette' '')"
+  [[ -n "$palette" ]] && args+=" --color-palette=$palette"
 
   # Perform binds: prefix (default) or no-prefix (-n)
   if $key_prefixless; then
