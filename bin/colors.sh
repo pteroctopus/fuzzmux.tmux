@@ -25,8 +25,8 @@ hex_to_ansi() {
   local g=$((16#${hex:2:2}))
   local b=$((16#${hex:4:2}))
   
-  # Return ANSI 24-bit color sequence
-  printf '\033[38;2;%d;%d;%dm' "$r" "$g" "$b"
+  # Return ANSI 24-bit color sequence with zero-padded values for consistent width
+  printf '\033[38;2;%03d;%03d;%03dm' "$r" "$g" "$b"
 }
 
 # Default terminal color palette (uses terminal's color scheme)
