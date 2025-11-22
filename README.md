@@ -7,13 +7,15 @@ Works with [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim) to track 
 
 ## Features
 
-- **Fuzzy find tmux sessions** - Quickly switch between sessions
-- **Fuzzy find tmux panes** - Quickly switch between panes across all sessions
-- **Fuzzy find tmux windows** - Jump to any window with ease
+- **Fuzzy find tmux sessions** - Quickly switch between sessions with attached session markers
+- **Fuzzy find tmux panes** - Quickly switch between panes across all sessions with active pane markers
+- **Fuzzy find tmux windows** - Jump to any window with ease with active window markers
 - **Fuzzy find Neovim buffers** - Switch to Neovim buffers across different panes **(requires [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim))**
+- **Active/attached markers** - Visual `*` indicator in the first column showing attached sessions, active windows, and active panes
 - **Colorized output** - Color-coded session/window identifiers for better visibility
 - **Live previews** - Preview pane/window content or file contents before switching
 - **Zoom support** - Optionally zoom into selected pane/window
+- **Optimized performance** - Fast execution using pure bash string operations and batch data fetching
 - **Configurable** - Customize keybindings and behavior
 - **Feature toggles** - Enable/disable individual features as needed
 
@@ -91,7 +93,8 @@ set -g @fuzzmux-color-palette '#eb6f92,#f6c177,#9ccfd8,#c4a7e7,#31748f,#ebbcba'
 ```
 
 **Notes:**
-- When disabling default bindings, fuzzmux will unbind its keybindings. If you had tmux default bindings on those keys (like `prefix + f` for find-window), they won't be automatically restored. To restore tmux defaults, restart tmux or manually rebind them in your `.tmux.conf`.
+- When `@fuzzmux-enable-bindings` is set to `'0'`, fuzzmux will unbind all its keybindings and clear its internal state. If you had tmux default bindings on those keys (like `prefix + f` for find-window), they won't be automatically restored. To restore tmux defaults, restart tmux or manually rebind them in your `.tmux.conf`.
+- When re-enabling bindings (setting back to `'1'`), fuzzmux will bind keys based on your current configuration options.
 - If `@fuzzmux-color-palette` is enabled and then removed from `.tmux.conf`, you need to manually unset it from tmux to return to defaults, or add this line to your `.tmux.conf` before loading the plugin:
   ```tmux
   set -gu @fuzzmux-color-palette
@@ -207,7 +210,7 @@ Each script accepts the following options when called manually:
 - `--popup-width=<value>` - Set popup width (default: 90%)
 - `--popup-height=<value>` - Set popup height (default: 90%)
 - `--popup-border=<style>` - Set border style (default: rounded)
-- `--popup-color=<color>` - Set border color (default: green)
+- `--popup-color=<color>` - Set border color (default: white)
 - `--color-palette=<colors>` - Set custom color palette (comma-separated hex colors)
 
 Example with custom colors:
@@ -238,12 +241,12 @@ Without fuzzmux.nvim, the buffer switcher (`prefix` + <kbd>f</kbd>) will display
 Press `prefix` + <kbd>s</kbd> to open the session switcher. You'll see a list like:
 
 ```
-@0        windows:3  2025-11-14 09:30  editor,server,logs    *
-@1        windows:2  2025-11-14 08:15  docker,monitoring
-@project  windows:5  2025-11-13 14:22  main,test,build,docs,debug
+* @main     windows:3  2025-11-14 09:30  editor,server,logs
+  @project  windows:2  2025-11-14 08:15  docker,monitoring
+  @test     windows:5  2025-11-13 14:22  main,test,build,docs,debug
 ```
 
-The `*` indicates the currently attached session. With preview enabled, the preview window shows all windows in the session with an arrow (→) indicating the active window.
+The `*` in the first column indicates attached sessions (sessions with active clients). With preview enabled, the preview window shows all windows in the session with an arrow (→) indicating the active window.
 
 - Type to fuzzy search
 - Use arrow keys to navigate
@@ -255,24 +258,24 @@ The `*` indicates the currently attached session. With preview enabled, the prev
 Press `prefix` + <kbd>w</kbd> to open the window switcher:
 
 ```
-@0 #0  nvim      panes:3  zsh,nvim,zsh  *
-@0 #1  server    panes:1  node
-@1 #0  database  panes:2  psql,zsh
+* @main #0  nvim      panes:3  zsh,nvim,zsh
+  @main #1  server    panes:1  node
+  @test #0  database  panes:2  psql,zsh
 ```
 
-The `*` indicates the currently active window. With preview enabled, the preview window shows the content of the active pane in the selected window.
+The `*` in the first column indicates the currently active window in the current attached session. With preview enabled, the preview window shows the content of the active pane in the selected window.
 
 ### Pane Switcher
 
 Press `prefix` + <kbd>p</kbd> to open the pane switcher. You'll see a list like:
 
 ```
-@0 #0 %0  zsh      title1    ~/Development/project       ~/Development/project/README.md
-@0 #0 %1  nvim     title2    ~/Development/project       ~/Development/project/main.go
-@1 #2 %0  zsh      title3    ~/Development/other         ~/Development/other/config.yml
+* @main #0 %0  zsh   title1  ~/Development/project  → README.md
+  @main #0 %1  nvim  title2  ~/Development/project  → main.go
+  @test #2 %0  zsh   title3  ~/Development/other
 ```
 
-The list shows: session, window, pane, command, title, current path, and current Neovim file (if fuzzmux.nvim is installed). With preview enabled, the preview shows pane content (last lines for shells, first lines for other commands).
+The `*` in the first column indicates the currently active pane in the current window. The list shows: marker, session, window, pane, command, title, current path, and current Neovim file (if fuzzmux.nvim is installed). With preview enabled, the preview shows pane content (last lines for shells, first lines for other commands).
 
 - Type to fuzzy search
 - Use arrow keys to navigate
@@ -284,12 +287,12 @@ The list shows: session, window, pane, command, title, current path, and current
 Press `prefix` + <kbd>f</kbd> to switch between Neovim buffers across all panes:
 
 ```
-@0 #0 %1  i:%5  ~/Development/project/main.go
-@0 #0 %1  i:%5  ~/Development/project/utils.go
-@1 #2 %0  i:%8  ~/Development/other/config.yaml
+  @main #0 %1  i:%5  ~/Development/project/main.go
+  @main #0 %1  i:%5  ~/Development/project/utils.go
+  @test #2 %0  i:%8  ~/Development/other/config.yaml
 ```
 
-The list shows: session, window, pane and file path. With preview enabled and `bat` installed, the preview shows syntax-highlighted file contents.
+The list shows: session, window, pane, pane ID, and file path. With preview enabled and `bat` installed, the preview shows syntax-highlighted file contents.
 
 When you select a buffer:
 1. tmux switches to the correct session, window, and pane

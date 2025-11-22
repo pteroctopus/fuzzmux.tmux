@@ -13,13 +13,16 @@ if ! command -v fzf >/dev/null 2>&1; then
   exit 1
 fi
 
+CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_DIR="$(dirname "$CURRENT_DIR")"
+
 ZOOM=false
 USE_COLORS=false
 PREVIEW=false
 POPUP_WIDTH="90%"
 POPUP_HEIGHT="90%"
 POPUP_BORDER="rounded"
-POPUP_COLOR="green"
+POPUP_COLOR="white"
 COLOR_PALETTE=""
 
 while [[ $# -gt 0 ]]; do
@@ -70,48 +73,120 @@ if [[ "${1:-}" != "--run" ]]; then
   [[ "$ZOOM" == "true" ]] && ARGS+=" --zoom"
   [[ "$USE_COLORS" == "true" ]] && ARGS+=" --colors"
   [[ "$PREVIEW" == "true" ]] && ARGS+=" --preview"
-  ARGS+=" --popup-width=$POPUP_WIDTH --popup-height=$POPUP_HEIGHT --popup-border=$POPUP_BORDER --popup-color=$POPUP_COLOR"
+  ARGS+=" --popup-width=$POPUP_WIDTH"
+  ARGS+=" --popup-height=$POPUP_HEIGHT"
+  ARGS+=" --popup-border=$POPUP_BORDER"
+  ARGS+=" --popup-color=$POPUP_COLOR"
   ARGS+=" --color-palette=$COLOR_PALETTE"
-  tmux display-popup -S "fg=${POPUP_COLOR}" -b "${POPUP_BORDER}" -T "Find tmux pane" -w "${POPUP_WIDTH}" -h "${POPUP_HEIGHT}" -E "$0$ARGS --run"
+
+  tmux display-popup -S "fg=${POPUP_COLOR}" \
+    -b "${POPUP_BORDER}" \
+    -T "Find tmux pane" \
+    -w "${POPUP_WIDTH}" \
+    -h "${POPUP_HEIGHT}" \
+    -E "$0$ARGS --run"
   exit 0
 fi
 
 # Source scripts
-source "$(dirname "$0")/colors.sh" "$COLOR_PALETTE"
+source "$PLUGIN_DIR/scripts/colors.sh" "$COLOR_PALETTE"
 
 # Delimiter for parsing
 DEL=$'\t'
 
-FORMAT="#{session_name}${DEL}#{window_index}${DEL}#{pane_index}${DEL}#{pane_id}${DEL}#{pane_current_command}${DEL}#{pane_title}${DEL}#{=|-40|…;s|$HOME|~|:pane_current_path}"
+# Get current pane info for marking active pane
+CURRENT_INFO=$(tmux display-message -p "#{session_name}${DEL}#{window_index}${DEL}#{pane_index}")
+IFS="${DEL}" read -r CURRENT_SESSION CURRENT_WINDOW CURRENT_PANE <<< "$CURRENT_INFO"
 
+# List all panes with relevant info by format
+FORMAT="#{session_name}${DEL}"
+FORMAT+="#{window_index}${DEL}"
+FORMAT+="#{pane_index}${DEL}"
+FORMAT+="#{pane_id}${DEL}"
+FORMAT+="#{pane_current_command}${DEL}"
+FORMAT+="#{pane_title}${DEL}"
+FORMAT+="#{pane_active}${DEL}"
+FORMAT+="#{window_active}${DEL}"
+FORMAT+="#{session_attached}${DEL}"
+FORMAT+="#{s|$HOME|~|:pane_current_path}"
 PANE_LIST=$(tmux list-panes -a -F "$FORMAT")
 
+# Get all FUZZMUX environment variables once
+declare -A NVIM_FILES
+while IFS='=' read -r var_name value; do
+  pane_id="${var_name#FUZZMUX_CURRENT_FILE_}"
+  # Remove quotes
+  value=${value#\'}
+  value=${value%\'}
+  NVIM_FILES["$pane_id"]="$value"
+done < <(tmux show-environment -g 2>/dev/null | grep "^FUZZMUX_CURRENT_FILE_")
+
+# Cache colors to avoid recalculating for same session/window
+declare -A COLOR_CACHE
+
+# Format pane list for fzf and add nvim current file if available
 FORMATED_PANE_LIST=""
-while IFS="${DEL}" read -r session window pane pane_id command title path; do
-  var_name="FUZZMUX_CURRENT_FILE_${pane_id}"
-  nvim_file=$(tmux show-environment -g "$var_name" 2>/dev/null | cut -d= -f2- || echo "")
-  nvim_file=${nvim_file#\'}
-  nvim_file=${nvim_file%\'}
+while IFS="${DEL}" read -r session window pane pane_id command title pane_active window_active session_attached path; do
+  # Determine if this is the active pane (only mark if it's in current attached session)
+  active_marker=" "
+  if [[ "$pane_active" == "1" && "$window_active" == "1" && "$session_attached" != "0" && "$session" == "$CURRENT_SESSION" && "$window" == "$CURRENT_WINDOW" && "$pane" == "$CURRENT_PANE" ]]; then
+    active_marker="*"
+  fi
+
+  # Fast lookup from associative array instead of calling tmux show-environment
+  nvim_file="${NVIM_FILES[$pane_id]:-}"
   nvim_file="${nvim_file/#$HOME/\~}"
+
   if [[ "$USE_COLORS" == "true" ]]; then
-    FORMATED_PANE_LIST+="$(pick_color "$session" "$window")@${session}${DEL}#${window}${DEL}%${pane}${RESET}${DEL}${command}${DEL}${title}${DEL}${path}${DEL}${nvim_file}"$'\n'
+    # Use cached color
+    cache_key="${session}_${window}"
+    if [[ -z "${COLOR_CACHE[$cache_key]:-}" ]]; then
+      COLOR_CACHE[$cache_key]=$(pick_color "$session" "$window")
+    fi
+    color="${COLOR_CACHE[$cache_key]}"
+    
+    # Attach marker directly to pane designation: %1*
+    FORMATED_PANE_LIST+="${active_marker}${DEL}${color}@${session}${DEL}"
+    FORMATED_PANE_LIST+="#${window}${DEL}"
+    FORMATED_PANE_LIST+="%${pane}${RESET}${DEL}"
+    FORMATED_PANE_LIST+="${command}${DEL}"
+    FORMATED_PANE_LIST+="${title}${DEL}"
+    FORMATED_PANE_LIST+="${path}"
+    FORMATED_PANE_LIST+="${color}${nvim_file:+ → ${nvim_file#$path/}}${RESET}"$'\n'
   else
-    FORMATED_PANE_LIST+="@${session}${DEL}#${window}${DEL}%${pane}${DEL}${command}${DEL}${title}${DEL}${path}${DEL}${nvim_file}"$'\n'
+    # Attach marker directly to pane designation: %1*
+    FORMATED_PANE_LIST+="${active_marker}${DEL}@${session}${DEL}"
+    FORMATED_PANE_LIST+="#${window}${DEL}"
+    FORMATED_PANE_LIST+="%${pane}${DEL}"
+    FORMATED_PANE_LIST+="${command}${DEL}"
+    FORMATED_PANE_LIST+="${title}${DEL}"
+    FORMATED_PANE_LIST+="${path}"
+    FORMATED_PANE_LIST+="${nvim_file:+ → ${nvim_file#$path/}}"$'\n'
   fi
 done <<<"$PANE_LIST"
 
 FORMATED_PANE_LIST=$(echo "$FORMATED_PANE_LIST" | column -t -s "${DEL}")
 
+# Start fzf selection
 PROMPT="pane > "
 
 if [[ "$PREVIEW" == "true" ]]; then
   SELECTION=$(
     echo "$FORMATED_PANE_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT" \
       --preview '
-            sess=$(echo {} | awk "{print \$1}" | sed "s/^@//")
-            win=$(echo {} | awk "{print \$2}" | sed "s/^#//")
-            pane=$(echo {} | awk "{print \$3}" | sed "s/^%//")
-            command=$(echo {} | awk "{print \$4}" | sed "s/^p//")
+            # Handle optional marker in first column
+            read -r col1 col2 col3 col4 col5 _rest <<< {}
+            if [[ "$col1" == "*" ]]; then
+              sess="${col2#@}"
+              win="${col3#\#}"
+              pane="${col4#%}"
+              command="$col5"
+            else
+              sess="${col1#@}"
+              win="${col2#\#}"
+              pane="${col3#%}"
+              command="$col4"
+            fi
             if [[ "$command" == "zsh" ]]; then
               tmux capture-pane -pt "${sess}:${win}.${pane}" -e | sed "/./!d" | tail -n "$FZF_PREVIEW_LINES"
             else
@@ -124,10 +199,18 @@ else
   SELECTION=$(echo "$FORMATED_PANE_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT") || exit 0
 fi
 
-while IFS=" " read -r session window pane _rest; do
-  session="${session#@}"
-  window="${window#\#}"
-  pane="${pane#%}"
+# Switch to selected pane
+while IFS=" " read -r first second third fourth _rest; do
+  # Handle marker: if first column is *, session/window/pane are in second/third/fourth columns
+  if [[ "$first" == "*" ]]; then
+    session="${second#@}"
+    window="${third#\#}"
+    pane="${fourth#%}"
+  else
+    session="${first#@}"
+    window="${second#\#}"
+    pane="${third#%}"
+  fi
   tmux switch-client -t "${session}:${window}"
   tmux select-pane -t "${pane}"
   if [[ "$ZOOM" == "true" ]]; then

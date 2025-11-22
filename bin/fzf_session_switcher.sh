@@ -13,13 +13,16 @@ if ! command -v fzf >/dev/null 2>&1; then
   exit 1
 fi
 
+CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_DIR="$(dirname "$CURRENT_DIR")"
+
 ZOOM=false
 USE_COLORS=false
 PREVIEW=false
 POPUP_WIDTH="90%"
 POPUP_HEIGHT="90%"
 POPUP_BORDER="rounded"
-POPUP_COLOR="green"
+POPUP_COLOR="white"
 COLOR_PALETTE=""
 
 while [[ $# -gt 0 ]]; do
@@ -77,7 +80,7 @@ if [[ "${1:-}" != "--run" ]]; then
 fi
 
 # Source scripts
-source "$(dirname "$0")/colors.sh" "$COLOR_PALETTE"
+source "$PLUGIN_DIR/scripts/colors.sh" "$COLOR_PALETTE"
 
 # Delimiter for parsing
 DEL=$'\t'
@@ -86,21 +89,43 @@ FORMAT="#{session_name}${DEL}#{session_windows}${DEL}#{session_attached}${DEL}#{
 
 SESSION_LIST=$(tmux list-sessions -F "$FORMAT")
 
+# Get all window names at once
+declare -A WINDOW_NAMES_MAP
+while IFS=: read -r session window_name; do
+  if [[ -n "${WINDOW_NAMES_MAP[$session]:-}" ]]; then
+    WINDOW_NAMES_MAP[$session]+=",${window_name}"
+  else
+    WINDOW_NAMES_MAP[$session]="$window_name"
+  fi
+done < <(tmux list-windows -a -F "#{session_name}:#{window_name}")
+
+# Cache colors
+declare -A COLOR_CACHE
+
 FORMATTED_SESSION_LIST=""
 while IFS="${DEL}" read -r session windows attached created; do
   attached_marker=""
-  [[ "$attached" != "0" ]] && attached_marker="*"
+  if [[ "$attached" == "0" ]] then
+    attached_marker=" "
+  else
+    attached_marker="*"
+  fi
 
-  # Get window names for this session
-  window_names=$(tmux list-windows -t "${session}" -F "#{window_name}" | paste -sd "," -)
+  # Fast lookup from map
+  window_names="${WINDOW_NAMES_MAP[$session]:-}"
 
-  # Convert created timestamp to readable format
-  created_date=$(date -r "$created" "+%Y-%m-%d %H:%M" 2>/dev/null || echo "")
+  printf -v created_date '%(%Y-%m-%d %H:%M)T' "$created"
 
   if [[ "$USE_COLORS" == "true" ]]; then
-    FORMATTED_SESSION_LIST+="$(pick_color "$session")@${session}${RESET}${DEL}windows:${windows}${DEL}${created_date}${DEL}${window_names}${DEL}${attached_marker}"$'\n'
+    # Use cached color
+    if [[ -z "${COLOR_CACHE[$session]:-}" ]]; then
+      COLOR_CACHE[$session]=$(pick_color "$session")
+    fi
+    # Attach marker directly to session name: @fuzzmux*
+    FORMATTED_SESSION_LIST+="${attached_marker}${DEL}${COLOR_CACHE[$session]}@${session}${RESET}${DEL}windows:${windows}${DEL}${created_date}${DEL}${window_names}"$'\n'
   else
-    FORMATTED_SESSION_LIST+="@${session}${DEL}windows:${windows}${DEL}${created_date}${DEL}${window_names}${DEL}${attached_marker}"$'\n'
+    # Attach marker directly to session name: @fuzzmux*
+    FORMATTED_SESSION_LIST+="${attached_marker}${DEL}@${session}${DEL}windows:${windows}${DEL}${created_date}${DEL}${window_names}"$'\n'
   fi
 done <<<"$SESSION_LIST"
 
@@ -111,7 +136,13 @@ if [[ "$PREVIEW" == "true" ]]; then
   SELECTION=$(
     echo "$FORMATTED_SESSION_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT" \
       --preview '
-            sess=$(echo {} | awk "{print \$1}" | sed "s/^@//")
+            # Handle optional marker in first column
+            read -r first second _rest <<< {}
+            if [[ "$first" == "*" ]]; then
+              sess="${second#@}"
+            else
+              sess="${first#@}"
+            fi
             tmux list-windows -t "${sess}" -F "#{window_index}: #{window_name} (#{window_panes} panes) #{window_active}" | \
             while IFS= read -r line; do
                 # Remove the trailing " 1" or " 0" but keep the rest
@@ -130,8 +161,13 @@ else
   SELECTION=$(echo "$FORMATTED_SESSION_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT") || exit 0
 fi
 
-while IFS=" " read -r session _rest; do
-  session="${session#@}"
+while IFS=" " read -r first second _rest; do
+  # Handle marker: if first column is *, session is in second column
+  if [[ "$first" == "*" ]]; then
+    session="${second#@}"
+  else
+    session="${first#@}"
+  fi
   tmux switch-client -t "${session}"
   if [[ "$ZOOM" == "true" ]]; then
     # Zoom the active pane in the active window of the session

@@ -33,14 +33,21 @@ command -v column >/dev/null 2>&1 || tmux display-message "fuzzmux.tmux: WARNING
 # Unbind previous keys
 for key in session session-zoom pane pane-zoom window window-zoom nvim nvim-zoom; do
   prev_key=$(get_tmux_option "@fuzzmux-prev-bind-${key}" "")
-  [[ -n "$prev_key" ]] && tmux unbind-key "$prev_key" 2>/dev/null || true
+  if [[ -n "$prev_key" ]]; then
+    # Handle '!' prefix marker for root table bindings
+    if [[ "${prev_key}" == \!* ]]; then
+      tmux unbind-key -n "${prev_key:1}" 2>/dev/null || true
+    else
+      tmux unbind-key "$prev_key" 2>/dev/null || true
+    fi
+  fi
 done
 
 # Build popup arguments (shared by all features)
 POPUP_ARGS=" --popup-width=$(get_tmux_option '@fuzzmux-popup-width' '90%')"
 POPUP_ARGS+=" --popup-height=$(get_tmux_option '@fuzzmux-popup-height' '90%')"
 POPUP_ARGS+=" --popup-border=$(get_tmux_option '@fuzzmux-popup-border-style' 'rounded')"
-POPUP_ARGS+=" --popup-color=$(get_tmux_option '@fuzzmux-popup-border-color' 'green')"
+POPUP_ARGS+=" --popup-color=$(get_tmux_option '@fuzzmux-popup-border-color' 'white')"
 
 declare -A FUZZMUX_DEFAULT_KEYS=(
   [session]=s
@@ -127,6 +134,11 @@ if [[ "$(get_tmux_option '@fuzzmux-enable-bindings' '1')" == "1" ]]; then
   bind_feature pane fzf_pane_switcher.sh @fuzzmux-bind-pane @fuzzmux-bind-pane-zoom
   bind_feature window fzf_window_switcher.sh @fuzzmux-bind-window @fuzzmux-bind-window-zoom
   bind_feature nvim fzf_nvim_buffer_switcher.sh @fuzzmux-bind-nvim @fuzzmux-bind-nvim-zoom
+else
+  # Clear stored bind options when bindings are disabled (clean slate)
+  for key in session session-zoom pane pane-zoom window window-zoom nvim nvim-zoom; do
+    tmux set-option -gu "@fuzzmux-prev-bind-${key}" 2>/dev/null || true
+  done
 fi
 
 tmux display-message "fuzzmux.tmux: Plugin loaded successfully"

@@ -13,13 +13,16 @@ if ! command -v fzf >/dev/null 2>&1; then
   exit 1
 fi
 
+CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_DIR="$(dirname "$CURRENT_DIR")"
+
 ZOOM=false
 USE_COLORS=false
 PREVIEW=false
 POPUP_WIDTH="90%"
 POPUP_HEIGHT="90%"
 POPUP_BORDER="rounded"
-POPUP_COLOR="green"
+POPUP_COLOR="white"
 COLOR_PALETTE=""
 
 while [[ $# -gt 0 ]]; do
@@ -77,7 +80,7 @@ if [[ "${1:-}" != "--run" ]]; then
 fi
 
 # Source scripts
-source "$(dirname "$0")/colors.sh" "$COLOR_PALETTE"
+source "$PLUGIN_DIR/scripts/colors.sh" "$COLOR_PALETTE"
 
 # Delimiter for parsing
 DEL=$'\t'
@@ -91,21 +94,43 @@ CURRENT_INFO=$(tmux display-message -p "#{session_name}${DEL}#{window_index}")
 CURRENT_SESSION=$(echo "$CURRENT_INFO" | cut -d"${DEL}" -f1)
 CURRENT_WINDOW=$(echo "$CURRENT_INFO" | cut -d"${DEL}" -f2)
 
+# Get all pane commands at once
+declare -A PANE_COMMANDS_MAP
+while IFS=: read -r session window command; do
+  key="${session}:${window}"
+  if [[ -n "${PANE_COMMANDS_MAP[$key]:-}" ]]; then
+    PANE_COMMANDS_MAP[$key]+=",${command}"
+  else
+    PANE_COMMANDS_MAP[$key]="$command"
+  fi
+done < <(tmux list-panes -a -F "#{session_name}:#{window_index}:#{pane_current_command}")
+
+# Cache colors
+declare -A COLOR_CACHE
+
 FORMATED_WINDOW_LIST=""
 while IFS="${DEL}" read -r session window name panes active attached; do
   active_marker=""
   # Only mark as active if it's the active window in the currently attached session
   if [[ "$active" == "1" && "$attached" != "0" && "$session" == "$CURRENT_SESSION" && "$window" == "$CURRENT_WINDOW" ]]; then
     active_marker="*"
+  else
+    active_marker=" "
   fi
 
-  # Get all pane commands for this window, comma-delimited
-  pane_commands=$(tmux list-panes -t "${session}:${window}" -F "#{pane_current_command}" | paste -sd "," -)
+  # Fast lookup from map
+  pane_commands="${PANE_COMMANDS_MAP[${session}:${window}]:-}"
 
   if [[ "$USE_COLORS" == "true" ]]; then
-    FORMATED_WINDOW_LIST+="$(pick_color "$session")@${session}${DEL}#${window}${RESET}${DEL}${name}${DEL}panes:${panes}${DEL}${pane_commands}${DEL}${active_marker}"$'\n'
+    # Use cached color
+    if [[ -z "${COLOR_CACHE[$session]:-}" ]]; then
+      COLOR_CACHE[$session]=$(pick_color "$session")
+    fi
+    # Attach marker directly to window designation: #1*
+    FORMATED_WINDOW_LIST+="${active_marker}${DEL}${COLOR_CACHE[$session]}@${session}${DEL}#${window}${RESET}${DEL}${name}${DEL}panes:${panes}${DEL}${pane_commands}"$'\n'
   else
-    FORMATED_WINDOW_LIST+="@${session}${DEL}#${window}${DEL}${name}${DEL}panes:${panes}${DEL}${pane_commands}${DEL}${active_marker}"$'\n'
+    # Attach marker directly to window designation: #1*
+    FORMATED_WINDOW_LIST+="${active_marker}${DEL}@${session}${DEL}#${window}${DEL}${name}${DEL}panes:${panes}${DEL}${pane_commands}"$'\n'
   fi
 done <<<"$WINDOW_LIST"
 
@@ -117,20 +142,33 @@ if [[ "$PREVIEW" == "true" ]]; then
   SELECTION=$(
     echo "$FORMATED_WINDOW_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT" \
       --preview '
-            sess=$(echo {} | awk "{print \$1}" | sed "s/^@//")
-            win=$(echo {} | awk "{print \$2}" | sed "s/^#//")
+            # Handle optional marker in first column
+            read -r col1 col2 col3 _rest <<< {}
+            if [[ "$col1" == "*" ]]; then
+              sess="${col2#@}"
+              win="${col3#\#}"
+            else
+              sess="${col1#@}"
+              win="${col2#\#}"
+            fi
             pane=$(tmux list-panes -t "${sess}:${win}" -F "#{pane_index} #{pane_active}" | grep " 1$" | cut -d" " -f1)
             tmux capture-pane -pt "${sess}:${win}.${pane}" -e | tail -n 50
         ' \
-      --preview-window=top:50%
+      --preview-window=top:40%
   ) || exit 0
 else
   SELECTION=$(echo "$FORMATED_WINDOW_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT") || exit 0
 fi
 
-while IFS=" " read -r session window _rest; do
-  session="${session#@}"
-  window="${window#\#}"
+while IFS=" " read -r first second third _rest; do
+  # Handle marker: if first column is *, session/window are in second/third columns
+  if [[ "$first" == "*" ]]; then
+    session="${second#@}"
+    window="${third#\#}"
+  else
+    session="${first#@}"
+    window="${second#\#}"
+  fi
   tmux switch-client -t "${session}:${window}"
   if [[ "$ZOOM" == "true" ]]; then
     # Check if window is already zoomed
