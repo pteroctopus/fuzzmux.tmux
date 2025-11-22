@@ -58,6 +58,7 @@ declare -A FUZZMUX_DEFAULT_KEYS=(
   [window-zoom]=W
   [nvim]=f
   [nvim-zoom]=F
+  [fzf-bind-filtering]=ctrl-f
 )
 
 # Bind keys for each enabled feature (supports leading '!' marker for no-prefix binds)
@@ -110,6 +111,11 @@ bind_feature() {
   local palette
   palette="$(get_tmux_option '@fuzzmux-color-palette' '')"
   [[ -n "$palette" ]] && args+=" --color-palette=$palette"
+  
+  # Add fzf bind key (single key for progressive filtering)
+  local fzf_bind
+  fzf_bind="$(get_tmux_option '@fuzzmux-fzf-bind-filtering' "${FUZZMUX_DEFAULT_KEYS[fzf-bind-filtering]}")"
+  [[ -n "$fzf_bind" ]] && args+=" --fzf-bind=$fzf_bind"
 
   # Perform binds: prefix (default) or no-prefix (-n)
   if $key_prefixless; then

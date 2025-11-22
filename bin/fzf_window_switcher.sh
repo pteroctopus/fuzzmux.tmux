@@ -24,6 +24,7 @@ POPUP_HEIGHT="90%"
 POPUP_BORDER="rounded"
 POPUP_COLOR="white"
 COLOR_PALETTE=""
+FZF_BIND_KEY="ctrl-f"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -59,6 +60,10 @@ while [[ $# -gt 0 ]]; do
     COLOR_PALETTE="${1#*=}"
     shift
     ;;
+  --fzf-bind=*)
+    FZF_BIND_KEY="${1#*=}"
+    shift
+    ;;
   --run)
     break
     ;;
@@ -75,6 +80,7 @@ if [[ "${1:-}" != "--run" ]]; then
   [[ "$PREVIEW" == "true" ]] && ARGS+=" --preview"
   ARGS+=" --popup-width=$POPUP_WIDTH --popup-height=$POPUP_HEIGHT --popup-border=$POPUP_BORDER --popup-color=$POPUP_COLOR"
   ARGS+=" --color-palette=$COLOR_PALETTE"
+  ARGS+=" --fzf-bind=$FZF_BIND_KEY"
   tmux display-popup -S "fg=${POPUP_COLOR}" -b "${POPUP_BORDER}" -T "Find tmux window" -w "${POPUP_WIDTH}" -h "${POPUP_HEIGHT}" -E "$0$ARGS --run"
   exit 0
 fi
@@ -137,10 +143,12 @@ done <<<"$WINDOW_LIST"
 FORMATED_WINDOW_LIST=$(echo "$FORMATED_WINDOW_LIST" | column -t -s "${DEL}")
 
 PROMPT="window > "
+# Toggle filtering: press once to filter by session, press again to clear filter
+BIND="${FZF_BIND_KEY}:transform:[[ \$FZF_QUERY == *'@$CURRENT_SESSION'* ]] && echo \"change-query()\" || echo \"change-query('@$CURRENT_SESSION' )\""
 
 if [[ "$PREVIEW" == "true" ]]; then
   SELECTION=$(
-    echo "$FORMATED_WINDOW_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT" \
+    echo "$FORMATED_WINDOW_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT" --bind="$BIND" \
       --preview '
             # Handle optional marker in first column
             read -r col1 col2 col3 _rest <<< {}
@@ -157,7 +165,7 @@ if [[ "$PREVIEW" == "true" ]]; then
       --preview-window=top:40%
   ) || exit 0
 else
-  SELECTION=$(echo "$FORMATED_WINDOW_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT") || exit 0
+  SELECTION=$(echo "$FORMATED_WINDOW_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT" --bind "$BIND") || exit 0
 fi
 
 while IFS=" " read -r first second third _rest; do

@@ -11,6 +11,7 @@ Works with [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim) to track 
 - **Fuzzy find tmux panes** - Quickly switch between panes across all sessions with active pane markers
 - **Fuzzy find tmux windows** - Jump to any window with ease with active window markers
 - **Fuzzy find Neovim buffers** - Switch to Neovim buffers across different panes **(requires [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim))**
+- **Progressive filtering** - Use a single key (default `ctrl-f`) to progressively filter results by session, window, or pane
 - **Active/attached markers** - Visual `*` indicator in the first column showing attached sessions, active windows, and active panes
 - **Colorized output** - Color-coded session/window identifiers for better visibility
 - **Live previews** - Preview pane/window content or file contents before switching
@@ -74,6 +75,19 @@ With default settings, the following keybindings are available (after pressing y
 - `prefix` + <kbd>P</kbd> - Fuzzy find and switch to a pane (with zoom)
 - `prefix` + <kbd>W</kbd> - Fuzzy find and switch to a window (with zoom)
 - `prefix` + <kbd>F</kbd> - Fuzzy find and switch to a Neovim buffer (with zoom) (needs fuzzmax.nvim plugin)
+
+## Integration with fuzzmux.nvim
+
+To enable Neovim buffer tracking and switching, install [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim) in your Neovim configuration. The plugin communicates with Neovim using:
+
+1. **Environment variables** - fuzzmux.nvim sets tmux environment variables with buffer information:
+   - `FUZZMUX_OPEN_FILES_<pane_id>` - Colon-separated list of open file paths
+   - `FUZZMUX_CURRENT_FILE_<pane_id>` - Currently active file in the pane
+   - `FUZZMUX_NVIM_SOCKET_<pane_id>` - Neovim socket path for RPC communication
+
+2. **Neovim RPC** - fuzzmux.tmux uses the socket to send buffer switching commands directly to Neovim
+
+Without fuzzmux.nvim, the buffer switcher (`prefix` + <kbd>f</kbd>) will display a message that no buffers are found.
 
 ## Configuration
 
@@ -155,6 +169,24 @@ set -g @fuzzmux-color-palette '#f7768e,#9ece6a,#e0af68,#7aa2f7,#bb9af7,#7dcfff'
 
 **Note:** When `@fuzzmux-color-palette` is not set or is empty, fuzzmux uses your terminal's default ANSI colors (red, green, yellow, blue, magenta, cyan), which automatically adapt to your terminal's color scheme.
 
+### Progressive Filtering
+
+Customize the fzf filtering keybinding. Press the key repeatedly to cycle through filter levels:
+
+```tmux
+# Change the filtering key (default: ctrl-f)
+set -g @fuzzmux-fzf-bind-filtering 'ctrl-f'
+
+# Examples:
+set -g @fuzzmux-fzf-bind-filtering 'ctrl-f'
+set -g @fuzzmux-fzf-bind-filtering 'alt-f'
+```
+
+**How it works:**
+- **Window switcher**: Press once to filter by current session, press again to clear
+- **Pane switcher**: Press 1st for session filter, 2nd for window filter, 3rd to clear
+- **Nvim buffer switcher**: Press 1st for session, 2nd for window, 3rd for pane, 4th to clear
+
 ### Custom Key Bindings
 
 Customize the default keybindings:
@@ -187,7 +219,7 @@ Or set up completely custom bindings:
 # Disable default bindings
 set -g @fuzzmux-enable-bindings '0'
 
-# Custom bindings (will use global popup and color settings)
+# Custom bindings (will **not** use global popup and color settings)
 bind-key -n M-s run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_session_switcher.sh"
 bind-key -n M-S run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_session_switcher.sh --zoom"
 bind-key -n M-p run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_pane_switcher.sh"
@@ -221,19 +253,6 @@ Example with custom colors:
   --color-palette='#ff0000,#00ff00,#0000ff'
 ```
 
-## Integration with fuzzmux.nvim
-
-To enable Neovim buffer tracking and switching, install [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim) in your Neovim configuration. The plugin communicates with Neovim using:
-
-1. **Environment variables** - fuzzmux.nvim sets tmux environment variables with buffer information:
-   - `FUZZMUX_OPEN_FILES_<pane_id>` - Colon-separated list of open file paths
-   - `FUZZMUX_CURRENT_FILE_<pane_id>` - Currently active file in the pane
-   - `FUZZMUX_NVIM_SOCKET_<pane_id>` - Neovim socket path for RPC communication
-
-2. **Neovim RPC** - fuzzmux.tmux uses the socket to send buffer switching commands directly to Neovim
-
-Without fuzzmux.nvim, the buffer switcher (`prefix` + <kbd>f</kbd>) will display a message that no buffers are found.
-
 ## Usage Examples
 
 ### Session Switcher
@@ -253,6 +272,8 @@ The `*` in the first column indicates attached sessions (sessions with active cl
 - Press <kbd>Enter</kbd> to switch to the selected session
 - Press <kbd>Esc</kbd> or <kbd>Ctrl-c</kbd> to cancel
 
+**Note:** Session switcher doesn't have filtering since you're already at the session level.
+
 ### Window Switcher
 
 Press `prefix` + <kbd>w</kbd> to open the window switcher:
@@ -264,6 +285,8 @@ Press `prefix` + <kbd>w</kbd> to open the window switcher:
 ```
 
 The `*` in the first column indicates the currently active window in the current attached session. With preview enabled, the preview window shows the content of the active pane in the selected window.
+
+**Filtering:** Press <kbd>Ctrl-f</kbd> (default) once to filter windows from the current session only, press again to show all windows.
 
 ### Pane Switcher
 
@@ -282,6 +305,11 @@ The `*` in the first column indicates the currently active pane in the current w
 - Press <kbd>Enter</kbd> to switch to the selected pane
 - Press <kbd>Esc</kbd> or <kbd>Ctrl-c</kbd> to cancel
 
+**Filtering:** Press <kbd>Ctrl-f</kbd> (default) to progressively filter:
+- 1st press: Show only panes from current session
+- 2nd press: Show only panes from current window
+- 3rd press: Clear filter (show all panes)
+
 ### Neovim Buffer Switcher
 
 Press `prefix` + <kbd>f</kbd> to switch between Neovim buffers across all panes:
@@ -298,6 +326,12 @@ When you select a buffer:
 1. tmux switches to the correct session, window, and pane
 2. fuzzmux.tmux sends a command via Neovim's RPC socket to open the selected buffer
 3. The selected buffer is opened in Neovim instantly
+
+**Filtering:** Press <kbd>Ctrl-f</kbd> (default) to progressively filter:
+- 1st press: Show only buffers from current session
+- 2nd press: Show only buffers from current window
+- 3rd press: Show only buffers from current pane
+- 4th press: Clear filter (show all buffers)
 
 ## Troubleshooting
 

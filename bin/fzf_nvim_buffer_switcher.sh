@@ -24,6 +24,7 @@ POPUP_HEIGHT="90%"
 POPUP_BORDER="rounded"
 POPUP_COLOR="white"
 COLOR_PALETTE=""
+FZF_BIND_KEY="ctrl-f"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -59,6 +60,10 @@ while [[ $# -gt 0 ]]; do
     COLOR_PALETTE="${1#*=}"
     shift
     ;;
+  --fzf-bind=*)
+    FZF_BIND_KEY="${1#*=}"
+    shift
+    ;;
   --run)
     break
     ;;
@@ -78,6 +83,7 @@ if [[ "${1:-}" != "--run" ]]; then
   ARGS+=" --popup-border=$POPUP_BORDER"
   ARGS+=" --popup-color=$POPUP_COLOR"
   ARGS+=" --color-palette=$COLOR_PALETTE"
+  ARGS+=" --fzf-bind=$FZF_BIND_KEY"
 
   tmux display-popup -S \
     "fg=${POPUP_COLOR}" \
@@ -94,6 +100,10 @@ source "$PLUGIN_DIR/scripts/colors.sh" "$COLOR_PALETTE"
 
 # Delimiter for parsing
 DEL=$'\t'
+
+# Get current context for fzf bindings
+CURRENT_INFO=$(tmux display-message -p "#{session_name}${DEL}#{window_index}${DEL}#{pane_index}")
+IFS="${DEL}" read -r CURRENT_SESSION CURRENT_WINDOW CURRENT_PANE <<< "$CURRENT_INFO"
 
 # Get all FUZZMUX_OPEN_FILES_* variables
 ENV_VARS=$(tmux show-environment -g 2>/dev/null | grep "^FUZZMUX_OPEN_FILES_" || true)
@@ -160,6 +170,11 @@ fzf_with_options() {
   local use_colors="${1:-false}"
   local preview="${2:-false}"
   PROMPT="nvim buffer > "
+  
+  # Create fzf bindings for progressive filtering (one key cycles through filters)
+  # First press: filter to session, second press: add window filter, third press: add pane filter, fourth press: clear
+  BIND_FILTER="${FZF_BIND_KEY}:transform:([[ \$FZF_QUERY == *'%$CURRENT_PANE'* ]] && echo \"change-query()\") || ([[ \$FZF_QUERY == *'#$CURRENT_WINDOW'* ]] && echo \"change-query('@$CURRENT_SESSION' '#$CURRENT_WINDOW' '%$CURRENT_PANE' )\") || ([[ \$FZF_QUERY == *'@$CURRENT_SESSION'* ]] && echo \"change-query('@$CURRENT_SESSION' '#$CURRENT_WINDOW' )\") || echo \"change-query('@$CURRENT_SESSION' )\""
+  BINDS="$BIND_FILTER"
 
   if [[ "$preview" == "true" ]]; then
     local preview_cmd='
@@ -173,15 +188,15 @@ fzf_with_options() {
       '
 
     if [[ "$use_colors" == "true" ]]; then
-      fzf --ansi --exit-0 --prompt "$PROMPT" --with-nth=1,2,3,5 --preview "$preview_cmd" --preview-window=top:40%
+      fzf --ansi --exit-0 --prompt "$PROMPT" --bind="$BINDS" --with-nth=1,2,3,5 --preview "$preview_cmd" --preview-window=top:40%
     else
-      fzf --exit-0 --prompt "$PROMPT" --with-nth=1,2,3,5 --preview "$preview_cmd" --preview-window=top:40%
+      fzf --exit-0 --prompt "$PROMPT" --bind="$BINDS" --with-nth=1,2,3,5 --preview "$preview_cmd" --preview-window=top:40%
     fi
   else
     if [[ "$use_colors" == "true" ]]; then
-      fzf --ansi --exit-0 --prompt "$PROMPT" --with-nth=1,2,3,5
+      fzf --ansi --exit-0 --prompt "$PROMPT" --bind="$BINDS" --with-nth=1,2,3,5
     else
-      fzf --exit-0 --prompt "$PROMPT" --with-nth=1,2,3,5
+      fzf --exit-0 --prompt "$PROMPT" --bind="$BINDS" --with-nth=1,2,3,5
     fi
   fi
 }

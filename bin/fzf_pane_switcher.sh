@@ -24,6 +24,7 @@ POPUP_HEIGHT="90%"
 POPUP_BORDER="rounded"
 POPUP_COLOR="white"
 COLOR_PALETTE=""
+FZF_BIND_KEY="ctrl-f"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -59,6 +60,10 @@ while [[ $# -gt 0 ]]; do
     COLOR_PALETTE="${1#*=}"
     shift
     ;;
+  --fzf-bind=*)
+    FZF_BIND_KEY="${1#*=}"
+    shift
+    ;;
   --run)
     break
     ;;
@@ -78,6 +83,7 @@ if [[ "${1:-}" != "--run" ]]; then
   ARGS+=" --popup-border=$POPUP_BORDER"
   ARGS+=" --popup-color=$POPUP_COLOR"
   ARGS+=" --color-palette=$COLOR_PALETTE"
+  ARGS+=" --fzf-bind=$FZF_BIND_KEY"
 
   tmux display-popup -S "fg=${POPUP_COLOR}" \
     -b "${POPUP_BORDER}" \
@@ -169,10 +175,13 @@ FORMATED_PANE_LIST=$(echo "$FORMATED_PANE_LIST" | column -t -s "${DEL}")
 
 # Start fzf selection
 PROMPT="pane > "
+# Progressive filtering: one key cycles through filters (session -> window -> clear)
+BIND_FILTER="${FZF_BIND_KEY}:transform:([[ \$FZF_QUERY == *'#$CURRENT_WINDOW'* ]] && echo \"change-query()\") || ([[ \$FZF_QUERY == *'@$CURRENT_SESSION'* ]] && echo \"change-query('@$CURRENT_SESSION' '#$CURRENT_WINDOW' )\") || echo \"change-query('@$CURRENT_SESSION' )\""
+BINDS="$BIND_FILTER"
 
 if [[ "$PREVIEW" == "true" ]]; then
   SELECTION=$(
-    echo "$FORMATED_PANE_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT" \
+    echo "$FORMATED_PANE_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT" --bind="$BINDS" \
       --preview '
             # Handle optional marker in first column
             read -r col1 col2 col3 col4 col5 _rest <<< {}
@@ -196,7 +205,7 @@ if [[ "$PREVIEW" == "true" ]]; then
       --preview-window=top:40%
   ) || exit 0
 else
-  SELECTION=$(echo "$FORMATED_PANE_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT") || exit 0
+  SELECTION=$(echo "$FORMATED_PANE_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT" --bind="$BINDS") || exit 0
 fi
 
 # Switch to selected pane
