@@ -19,6 +19,7 @@ PLUGIN_DIR="$(dirname "$CURRENT_DIR")"
 ZOOM=false
 USE_COLORS=false
 PREVIEW=false
+PREVIEW_WINDOW="right:30%"
 POPUP_WIDTH="90%"
 POPUP_HEIGHT="90%"
 POPUP_BORDER="rounded"
@@ -38,6 +39,10 @@ while [[ $# -gt 0 ]]; do
     ;;
   --preview)
     PREVIEW=true
+    shift
+    ;;
+  --preview-window=*)
+    PREVIEW_WINDOW="${1#*=}"
     shift
     ;;
   --popup-width=*)
@@ -78,6 +83,7 @@ if [[ "${1:-}" != "--run" ]]; then
   [[ "$ZOOM" == "true" ]] && ARGS+=" --zoom"
   [[ "$USE_COLORS" == "true" ]] && ARGS+=" --colors"
   [[ "$PREVIEW" == "true" ]] && ARGS+=" --preview"
+  ARGS+=" --preview-window=$PREVIEW_WINDOW"
   ARGS+=" --popup-width=$POPUP_WIDTH"
   ARGS+=" --popup-height=$POPUP_HEIGHT"
   ARGS+=" --popup-border=$POPUP_BORDER"
@@ -202,7 +208,7 @@ if [[ "$PREVIEW" == "true" ]]; then
               tmux capture-pane -pt "${sess}:${win}.${pane}" -e | head -n "$FZF_PREVIEW_LINES"
             fi
         ' \
-      --preview-window=top:40%
+      --preview-window="${PREVIEW_WINDOW}"
   ) || exit 0
 else
   SELECTION=$(echo "$FORMATED_PANE_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT" --bind="$BINDS") || exit 0

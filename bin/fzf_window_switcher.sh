@@ -19,6 +19,7 @@ PLUGIN_DIR="$(dirname "$CURRENT_DIR")"
 ZOOM=false
 USE_COLORS=false
 PREVIEW=false
+PREVIEW_WINDOW="right:30%"
 POPUP_WIDTH="90%"
 POPUP_HEIGHT="90%"
 POPUP_BORDER="rounded"
@@ -38,6 +39,10 @@ while [[ $# -gt 0 ]]; do
     ;;
   --preview)
     PREVIEW=true
+    shift
+    ;;
+  --preview-window=*)
+    PREVIEW_WINDOW="${1#*=}"
     shift
     ;;
   --popup-width=*)
@@ -78,7 +83,7 @@ if [[ "${1:-}" != "--run" ]]; then
   [[ "$ZOOM" == "true" ]] && ARGS+=" --zoom"
   [[ "$USE_COLORS" == "true" ]] && ARGS+=" --colors"
   [[ "$PREVIEW" == "true" ]] && ARGS+=" --preview"
-  ARGS+=" --popup-width=$POPUP_WIDTH --popup-height=$POPUP_HEIGHT --popup-border=$POPUP_BORDER --popup-color=$POPUP_COLOR"
+  ARGS+=" --preview-window=$PREVIEW_WINDOW --popup-width=$POPUP_WIDTH --popup-height=$POPUP_HEIGHT --popup-border=$POPUP_BORDER --popup-color=$POPUP_COLOR"
   ARGS+=" --color-palette=$COLOR_PALETTE"
   ARGS+=" --fzf-bind=$FZF_BIND_KEY"
   tmux display-popup -S "fg=${POPUP_COLOR}" -b "${POPUP_BORDER}" -T "Find tmux window" -w "${POPUP_WIDTH}" -h "${POPUP_HEIGHT}" -E "$0$ARGS --run"
@@ -162,7 +167,7 @@ if [[ "$PREVIEW" == "true" ]]; then
             pane=$(tmux list-panes -t "${sess}:${win}" -F "#{pane_index} #{pane_active}" | grep " 1$" | cut -d" " -f1)
             tmux capture-pane -pt "${sess}:${win}.${pane}" -e | tail -n 50
         ' \
-      --preview-window=top:40%
+      --preview-window="${PREVIEW_WINDOW}"
   ) || exit 0
 else
   SELECTION=$(echo "$FORMATED_WINDOW_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT" --bind "$BIND") || exit 0

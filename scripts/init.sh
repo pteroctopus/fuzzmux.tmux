@@ -108,9 +108,11 @@ bind_feature() {
   local args="${POPUP_ARGS:-}"
   [[ "$(get_tmux_option "@fuzzmux-${feature}-preview-enabled" '1')" == "1" ]] && args+=" --preview"
   [[ "$(get_tmux_option '@fuzzmux-colors-enabled' '1')" == "1" ]] && args+=" --colors"
-  local palette
-  palette="$(get_tmux_option '@fuzzmux-color-palette' '')"
+  local palette="$(get_tmux_option '@fuzzmux-color-palette' '')"
   [[ -n "$palette" ]] && args+=" --color-palette=$palette"
+  local preview_window="$(get_tmux_option @fuzzmux-${feature}-preview-window right:30%)"
+  [[ -n $preview_window ]] && args+=" --preview-window=$preview_window"
+
   
   # Add fzf bind key (single key for progressive filtering)
   local fzf_bind

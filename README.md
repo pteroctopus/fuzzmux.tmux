@@ -146,6 +146,12 @@ set -g @fuzzmux-popup-border-style 'rounded'
 
 # Change border color (any tmux color name)
 set -g @fuzzmux-popup-border-color 'cyan'
+
+# Customize preview window position and size for each feature (default: right:30%)
+set -g @fuzzmux-session-preview-window 'right:30%'
+set -g @fuzzmux-pane-preview-window 'right:30%'
+set -g @fuzzmux-window-preview-window 'right:30%'
+set -g @fuzzmux-nvim-preview-window 'right:30%'
 ```
 
 ### Color Customization
