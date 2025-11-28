@@ -153,7 +153,7 @@ while IFS='=' read -r var_name files; do
         # Use cached color
         cache_key="${session}_${window}"
         if [[ -z "${COLOR_CACHE[$cache_key]:-}" ]]; then
-          COLOR_CACHE[$cache_key]=$(pick_color "$session" "$window")
+          COLOR_CACHE[$cache_key]=$(pick_color "$session")
         fi
         FILE_LIST+="${COLOR_CACHE[$cache_key]}@${session}${DEL}#${window}${DEL}%${pane}${DEL}i:${pane_id}${RESET}${DEL}${display_path}"$'\n'
       else

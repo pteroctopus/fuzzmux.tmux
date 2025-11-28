@@ -153,7 +153,7 @@ while IFS="${DEL}" read -r session window pane pane_id command title pane_active
     # Use cached color
     cache_key="${session}_${window}"
     if [[ -z "${COLOR_CACHE[$cache_key]:-}" ]]; then
-      COLOR_CACHE[$cache_key]=$(pick_color "$session" "$window")
+      COLOR_CACHE[$cache_key]=$(pick_color "$session")
     fi
     color="${COLOR_CACHE[$cache_key]}"
     
