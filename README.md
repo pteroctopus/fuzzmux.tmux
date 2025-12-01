@@ -95,6 +95,14 @@ When executed, you'll be prompted to enter a Neovim command (e.g., `set number`)
 - `:fuzzmux-broadcast-nvim` then enter `vsplit` - Open vertical splits in all Neovim instances
 - `:fuzzmux-broadcast-nvim` then enter `wqa` - Save all changes and close all Neovim instances
 
+Broadcast command can also be mapped to a keybinding in your tmux configuration, for example:
+```tmux
+bind-key -n M-x fuzzmux-broadcast-nvim
+# prefix + Ctrl-R to reload tmux config
+```
+Then when pressing `Alt` + <kbd>x</kbd>, you'll be prompted to enter a Neovim command to broadcast.
+
+
 ## Integration with fuzzmux.nvim
 
 To enable Neovim buffer tracking and switching, install [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim) in your Neovim configuration. The plugin communicates with Neovim using:
