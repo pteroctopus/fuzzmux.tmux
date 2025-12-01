@@ -247,7 +247,7 @@ if [[ -n "$socket" ]]; then
   socket=${socket#\'}
   socket=${socket%\'}
 
-  nvim --clean --server \
+  nvim --headless --clean --server \
     "$socket" \
-    --remote-send "<C-\\><C-N>:buffer ${filepath}<cr><c-l>"
+    --remote-expr "execute('buffer ${filepath}')"
 fi

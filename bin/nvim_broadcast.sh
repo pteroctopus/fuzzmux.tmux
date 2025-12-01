@@ -17,7 +17,7 @@ done < <(tmux show-environment -g 2>/dev/null | grep "^FUZZMUX_NVIM_SOCKET_")
 # Send command to each nvim socket
 for socket in "${NVIM_SOCKETS[@]}"; do
   if [[ -S "$socket" ]]; then
-    nvim --clean --server "$socket" --remote-send "<C-\\><C-N>:${CMD}<CR>"
+    nvim --headless --clean --server "$socket" --remote-send "<C-\\><C-N>:${CMD}<CR>"
   fi
 done
 
