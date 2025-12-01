@@ -95,12 +95,19 @@ When executed, you'll be prompted to enter a Neovim command (e.g., `set number`)
 - `:fuzzmux-broadcast-nvim` then enter `vsplit` - Open vertical splits in all Neovim instances
 - `:fuzzmux-broadcast-nvim` then enter `wqa` - Save all changes and close all Neovim instances
 
-Broadcast command can also be mapped to a keybinding in your tmux configuration, for example:
+**Setting a keybinding:**
+
+To set a keybinding for the broadcast command, add the `@fuzzmux-bind-broadcast-nvim` option to your tmux configuration (note: no default binding is set):
+
 ```tmux
-bind-key -n M-x fuzzmux-broadcast-nvim
-# prefix + Ctrl-R to reload tmux config
+# Example: Prefix + Ctrl-B
+set -g @fuzzmux-bind-broadcast-nvim 'C-b'
+
+# Example: Alt+X without prefix
+set -g @fuzzmux-bind-broadcast-nvim '!M-x'
 ```
-Then when pressing `Alt` + <kbd>x</kbd>, you'll be prompted to enter a Neovim command to broadcast.
+
+Then when pressing the configured key, you'll be prompted to enter a Neovim command to broadcast.
 
 
 ## Integration with fuzzmux.nvim
@@ -235,6 +242,9 @@ set -g @fuzzmux-bind-window-zoom 'W'    # prefix + W for windows with zoom
 set -g @fuzzmux-bind-nvim 'f'           # prefix + f for nvim buffers
 set -g @fuzzmux-bind-nvim-zoom 'F'      # prefix + F for nvim buffers with zoom
 
+# Bind broadcast-nvim command (no default)
+set -g @fuzzmux-bind-broadcast-nvim '!M-x' # Alt+x without prefix for nvim broadcast
+
 # Use '!' prefix for bindings without tmux prefix (e.g., Alt+key combinations)
 set -g @fuzzmux-bind-session '!M-s'      # Alt+s without prefix for sessions
 set -g @fuzzmux-bind-session-zoom '!M-S' # Alt+Shift+s without prefix for sessions with zoom
@@ -264,6 +274,11 @@ bind-key -n M-F run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_nvim_buffer_swit
 ```
 
 **Note:** When using custom bindings, the scripts **don't respect** global configuration settings (`@fuzzmux-popup-*`, `@fuzzmux-colors-enabled`, `@fuzzmux-<feature>-preview-enabled`) automatically. You need to add the desired options (`--preview`, `--colors`, `--zoom`, etc.) directly to the command.
+
+**Note on `@fuzzmux-bind-broadcast-nvim`:**
+- Unlike other fuzzmux features, the broadcast-nvim command has **no default keybinding**
+- Set `@fuzzmux-bind-broadcast-nvim` to enable it
+- Examples: `set -g @fuzzmux-bind-broadcast-nvim 'C-b'` or `set -g @fuzzmux-bind-broadcast-nvim '!M-x'`
 
 ### Command Line Options
 
