@@ -249,5 +249,5 @@ if [[ -n "$socket" ]]; then
 
   nvim --headless --clean --server \
     "$socket" \
-    --remote-expr "execute('buffer ${filepath}')"
+    --remote-send "<C-\\><C-N>:buffer ${filepath}<cr><c-l>"
 fi
