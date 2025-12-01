@@ -11,6 +11,7 @@ Works with [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim) to track 
 - **Fuzzy find tmux panes** - Quickly switch between panes across all sessions with active pane markers
 - **Fuzzy find tmux windows** - Jump to any window with ease with active window markers
 - **Fuzzy find Neovim buffers** - Switch to Neovim buffers across different panes **(requires [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim))**
+- **Broadcast Neovim commands** - Send commands to all active Neovim instances across tmux panes **(requires [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim))**
 - **Progressive filtering** - Use a single key (default `ctrl-f`) to progressively filter results by session, window, or pane
 - **Active/attached markers** - Visual `*` indicator in the first column showing attached sessions, active windows, and active panes
 - **Colorized output** - Color-coded session/window identifiers for better visibility
@@ -75,6 +76,24 @@ With default settings, the following keybindings are available (after pressing y
 - `prefix` + <kbd>P</kbd> - Fuzzy find and switch to a pane (with zoom)
 - `prefix` + <kbd>W</kbd> - Fuzzy find and switch to a window (with zoom)
 - `prefix` + <kbd>F</kbd> - Fuzzy find and switch to a Neovim buffer (with zoom) (needs fuzzmax.nvim plugin)
+
+## Custom Commands
+
+### fuzzmux-broadcast-nvim
+
+Broadcast a Neovim command to all active Neovim instances across tmux panes:
+
+```
+:fuzzmux-broadcast-nvim
+```
+
+When executed, you'll be prompted to enter a Neovim command (e.g., `set number`). The command will be sent via RPC to all Neovim instances that are being tracked by fuzzmux.nvim.
+
+**Example usage:**
+- `:fuzzmux-broadcast-nvim` then enter `set number` - Enable line numbers in all Neovim instances
+- `:fuzzmux-broadcast-nvim` then enter `Oil` - Open Oil file browser in all Neovim instances
+- `:fuzzmux-broadcast-nvim` then enter `vsplit` - Open vertical splits in all Neovim instances
+- `:fuzzmux-broadcast-nvim` then enter `wqa` - Save all changes and close all Neovim instances
 
 ## Integration with fuzzmux.nvim
 

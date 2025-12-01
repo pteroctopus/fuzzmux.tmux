@@ -249,5 +249,5 @@ if [[ -n "$socket" ]]; then
 
   nvim --clean --server \
     "$socket" \
-    --remote-send ":buffer ${filepath}<cr><c-l>"
+    --remote-send "<C-\\><C-N>:buffer ${filepath}<cr><c-l>"
 fi
