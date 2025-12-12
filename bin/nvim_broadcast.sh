@@ -22,3 +22,4 @@ for socket in "${NVIM_SOCKETS[@]}"; do
 done
 
 tmux set-option -gu @fuzzmux-nvim-broadcast
+tmux display-message -ld 1500 "Neovim broadcast finished"
