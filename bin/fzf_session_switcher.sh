@@ -140,9 +140,9 @@ PROMPT="session > "
 if [[ "$PREVIEW" == "true" ]]; then
   SELECTION=$(
     echo "$FORMATTED_SESSION_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT" \
-      --preview '
+      --preview 'bash -c '\''
             # Handle optional marker in first column
-            read -r first second _rest <<< {}
+            read -r first second _rest <<< "$1"
             if [[ "$first" == "*" ]]; then
               sess="${second#@}"
             else
@@ -159,7 +159,7 @@ if [[ "$PREVIEW" == "true" ]]; then
                     echo "  $info"
                 fi
             done
-        ' \
+        '\'' _ {}' \
       --preview-window="${PREVIEW_WINDOW}"
   ) || exit 0
 else

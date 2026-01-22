@@ -154,9 +154,9 @@ BIND="${FZF_BIND_KEY}:transform:[[ \$FZF_QUERY == *'@$CURRENT_SESSION'* ]] && ec
 if [[ "$PREVIEW" == "true" ]]; then
   SELECTION=$(
     echo "$FORMATED_WINDOW_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT" --bind="$BIND" \
-      --preview '
+      --preview 'bash -c '\''
             # Handle optional marker in first column
-            read -r col1 col2 col3 _rest <<< {}
+            read -r col1 col2 col3 _rest <<< "$1"
             if [[ "$col1" == "*" ]]; then
               sess="${col2#@}"
               win="${col3#\#}"
@@ -166,7 +166,7 @@ if [[ "$PREVIEW" == "true" ]]; then
             fi
             pane=$(tmux list-panes -t "${sess}:${win}" -F "#{pane_index} #{pane_active}" | grep " 1$" | cut -d" " -f1)
             tmux capture-pane -pt "${sess}:${win}.${pane}" -e | tail -n 50
-        ' \
+        '\'' _ {}' \
       --preview-window="${PREVIEW_WINDOW}"
   ) || exit 0
 else
