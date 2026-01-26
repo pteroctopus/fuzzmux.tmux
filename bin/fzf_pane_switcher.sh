@@ -188,9 +188,9 @@ BINDS="$BIND_FILTER"
 if [[ "$PREVIEW" == "true" ]]; then
   SELECTION=$(
     echo "$FORMATED_PANE_LIST" | fzf --ansi --exit-0 --prompt "$PROMPT" --bind="$BINDS" \
-      --preview '
+      --preview 'bash -c '\''
             # Handle optional marker in first column
-            read -r col1 col2 col3 col4 col5 _rest <<< {}
+            read -r col1 col2 col3 col4 col5 _rest <<< "$1"
             if [[ "$col1" == "*" ]]; then
               sess="${col2#@}"
               win="${col3#\#}"
@@ -207,7 +207,7 @@ if [[ "$PREVIEW" == "true" ]]; then
             else
               tmux capture-pane -pt "${sess}:${win}.${pane}" -e | head -n "$FZF_PREVIEW_LINES"
             fi
-        ' \
+        '\'' _ {}' \
       --preview-window="${PREVIEW_WINDOW}"
   ) || exit 0
 else

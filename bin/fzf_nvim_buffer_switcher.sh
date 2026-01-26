@@ -183,15 +183,15 @@ fzf_with_options() {
   BINDS="$BIND_FILTER"
 
   if [[ "$preview" == "true" ]]; then
-    local preview_cmd='
-          read -r _ _ _ _ file <<< {};
+    local preview_cmd='bash -c '\''
+          read -r _ _ _ _ file <<< "$1";
           file="${file/#\~/$HOME}";
           if command -v bat >/dev/null 2>&1; then
               bat --style=numbers --color=always "$file" 2>/dev/null || cat "$file"
           else
               cat "$file"
           fi
-      '
+      '\'' _ {}'
 
     if [[ "$use_colors" == "true" ]]; then
       fzf --ansi --exit-0 --prompt "$PROMPT" --bind="$BINDS" --with-nth=1,2,3,5 --preview "$preview_cmd" --preview-window="${PREVIEW_WINDOW}"
