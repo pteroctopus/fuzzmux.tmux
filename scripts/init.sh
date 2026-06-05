@@ -31,7 +31,7 @@ command -v bat >/dev/null 2>&1 || tmux display-message "fuzzmux.tmux: WARNING - 
 command -v column >/dev/null 2>&1 || tmux display-message "fuzzmux.tmux: WARNING - column not found (optional, for formatting)"
 
 # Unbind previous keys
-for key in session session-zoom pane pane-zoom window window-zoom nvim nvim-zoom; do
+for key in session session-zoom pane pane-zoom window window-zoom nvim nvim-zoom jump-back jump-forward; do
   prev_key=$(get_tmux_option "@fuzzmux-prev-bind-${key}" "")
   if [[ -n "$prev_key" ]]; then
     # Handle '!' prefix marker for root table bindings
@@ -137,6 +137,62 @@ bind_feature() {
   tmux set-option -g "@fuzzmux-prev-bind-${feature}-zoom" "$key_zoom_raw"
 }
 
+# Jumplist hooks fired on active-pane change. Listed once so install and removal
+# stay in sync.
+JUMPLIST_HOOKS=(pane-focus-in after-select-pane after-select-window \
+  client-session-changed session-window-changed)
+
+# Install focus-tracking hooks (idempotent: a global flag survives config reload,
+# so re-sourcing ~/.tmux.conf does not append our hooks twice).
+install_jumplist_hooks() {
+  [[ "$(get_tmux_option '@fuzzmux-jumplist-installed' '0')" == "1" ]] && return
+  tmux set -g focus-events on
+  local h
+  for h in "${JUMPLIST_HOOKS[@]}"; do
+    tmux set-hook -ga "$h" "run-shell -b '${PLUGIN_DIR}/bin/jumplist_record.sh #{pane_id}'"
+  done
+  tmux set-option -g @fuzzmux-jumplist-installed 1
+}
+
+# Remove only our hooks, preserving any user hooks on the same events. Scans both
+# server (-g) and window (-gw) scopes because pane-focus-in is a window hook.
+# Re-reads each pass so index shifts from prior removals are handled.
+remove_jumplist_hooks() {
+  local line hook idx
+  while line="$({ tmux show-hooks -g; tmux show-hooks -gw; } 2>/dev/null | grep -m1 'jumplist_record.sh')"; do
+    [[ -z "$line" ]] && break
+    hook="${line%%\[*}"
+    idx="${line#*\[}"
+    idx="${idx%%\]*}"
+    tmux set-hook -gu "${hook}[${idx}]" 2>/dev/null || true
+  done
+  tmux set-option -gu @fuzzmux-jumplist-installed 2>/dev/null || true
+}
+
+# Bind a single jumplist direction, honouring the '!' no-prefix marker.
+bind_jump_key() {
+  local key_raw=$1 nav_arg=$2
+  if [[ "${key_raw}" == \!* ]]; then
+    tmux bind-key -n "${key_raw:1}" run-shell "${PLUGIN_DIR}/bin/jumplist_nav.sh ${nav_arg}"
+  else
+    tmux bind-key "${key_raw}" run-shell "${PLUGIN_DIR}/bin/jumplist_nav.sh ${nav_arg}"
+  fi
+}
+
+# Bind back/forward keys and record them for the unbind loop.
+bind_jumplist() {
+  local back_raw fwd_raw
+  back_raw="$(get_tmux_option '@fuzzmux-bind-jump-back' 'C-h')"
+  fwd_raw="$(get_tmux_option '@fuzzmux-bind-jump-forward' 'C-l')"
+  [[ -z "$back_raw" || -z "$fwd_raw" ]] && return
+
+  bind_jump_key "$back_raw" "--back"
+  bind_jump_key "$fwd_raw" "--forward"
+
+  tmux set-option -g "@fuzzmux-prev-bind-jump-back" "$back_raw"
+  tmux set-option -g "@fuzzmux-prev-bind-jump-forward" "$fwd_raw"
+}
+
 if [[ "$(get_tmux_option '@fuzzmux-enable-bindings' '1')" == "1" ]]; then
   bind_feature session fzf_session_switcher.sh @fuzzmux-bind-session @fuzzmux-bind-session-zoom
   bind_feature pane fzf_pane_switcher.sh @fuzzmux-bind-pane @fuzzmux-bind-pane-zoom
@@ -144,9 +200,23 @@ if [[ "$(get_tmux_option '@fuzzmux-enable-bindings' '1')" == "1" ]]; then
   bind_feature nvim fzf_nvim_buffer_switcher.sh @fuzzmux-bind-nvim @fuzzmux-bind-nvim-zoom
 else
   # Clear stored bind options when bindings are disabled (clean slate)
-  for key in session session-zoom pane pane-zoom window window-zoom nvim nvim-zoom; do
+  for key in session session-zoom pane pane-zoom window window-zoom nvim nvim-zoom jump-back jump-forward; do
     tmux set-option -gu "@fuzzmux-prev-bind-${key}" 2>/dev/null || true
   done
+fi
+
+# --- Pane jumplist (back/forward focused-pane navigation) ---
+# Hooks track history independently of the binding toggle; the jump keys are
+# only bound when bindings are also enabled.
+if [[ "$(get_tmux_option '@fuzzmux-jumplist-enabled' '1')" == "1" ]]; then
+  install_jumplist_hooks
+  if [[ "$(get_tmux_option '@fuzzmux-enable-bindings' '1')" == "1" ]]; then
+    bind_jumplist
+  fi
+else
+  remove_jumplist_hooks
+  tmux set-option -gu @fuzzmux-prev-bind-jump-back 2>/dev/null || true
+  tmux set-option -gu @fuzzmux-prev-bind-jump-forward 2>/dev/null || true
 fi
 
 tmux display-message "fuzzmux.tmux: Plugin loaded successfully"
