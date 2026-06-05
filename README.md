@@ -82,6 +82,9 @@ With default settings, the following keybindings are available (after pressing y
 - `prefix` + <kbd>Ctrl-h</kbd> - Jump **back** to the previously focused pane
 - `prefix` + <kbd>Ctrl-l</kbd> - Jump **forward** again
 
+**Neovim broadcast:**
+- `prefix` + <kbd>b</kbd> - Broadcast a Neovim command to all tracked instances (needs fuzzmux.nvim)
+
 ## Pane Jumplist
 
 Navigate the history of focused panes like a browser's back/forward buttons (or
@@ -120,7 +123,7 @@ When executed, you'll be prompted to enter a Neovim command (e.g., `set number`)
 
 **Setting a keybinding:**
 
-To set a keybinding for the broadcast command, add the `@fuzzmux-bind-broadcast-nvim` option to your tmux configuration (note: no default binding is set):
+The broadcast command is bound to `prefix` + <kbd>b</kbd> by default. Override it with the `@fuzzmux-bind-broadcast-nvim` option:
 
 ```tmux
 # Example: Prefix + Ctrl-B
@@ -271,7 +274,8 @@ set -g @fuzzmux-bind-nvim-zoom 'F'      # prefix + F for nvim buffers with zoom
 set -g @fuzzmux-bind-jump-back 'C-h'    # prefix + Ctrl-h to jump back
 set -g @fuzzmux-bind-jump-forward 'C-l' # prefix + Ctrl-l to jump forward
 
-# Bind broadcast-nvim command (no default)
+# Broadcast-nvim command (default: prefix + b)
+set -g @fuzzmux-bind-broadcast-nvim 'b'    # prefix + b for nvim broadcast
 set -g @fuzzmux-bind-broadcast-nvim '!M-x' # Alt+x without prefix for nvim broadcast
 
 # Use '!' prefix for bindings without tmux prefix (e.g., Alt+key combinations)
@@ -305,8 +309,8 @@ bind-key -n M-F run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_nvim_buffer_swit
 **Note:** When using custom bindings, the scripts **don't respect** global configuration settings (`@fuzzmux-popup-*`, `@fuzzmux-colors-enabled`, `@fuzzmux-<feature>-preview-enabled`) automatically. You need to add the desired options (`--preview`, `--colors`, `--zoom`, etc.) directly to the command.
 
 **Note on `@fuzzmux-bind-broadcast-nvim`:**
-- Unlike other fuzzmux features, the broadcast-nvim command has **no default keybinding**
-- Set `@fuzzmux-bind-broadcast-nvim` to enable it
+- The broadcast-nvim command is bound to `prefix` + <kbd>b</kbd> by default
+- Set `@fuzzmux-bind-broadcast-nvim` to override the key
 - Examples: `set -g @fuzzmux-bind-broadcast-nvim 'C-b'` or `set -g @fuzzmux-bind-broadcast-nvim '!M-x'`
 
 ### Command Line Options
