@@ -12,6 +12,7 @@ Works with [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim) to track 
 - **Fuzzy find tmux windows** - Jump to any window with ease with active window markers
 - **Fuzzy find Neovim buffers** - Switch to Neovim buffers across different panes **(requires [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim))**
 - **Broadcast Neovim commands** - Send commands to all active Neovim instances across tmux panes **(requires [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim))**
+- **Pane jumplist** - Browser/Vim-style back/forward navigation through your focused-pane history (global across all sessions)
 - **Progressive filtering** - Use a single key (default `ctrl-f`) to progressively filter results by session, window, or pane
 - **Active/attached markers** - Visual `*` indicator in the first column showing attached sessions, active windows, and active panes
 - **Colorized output** - Color-coded session/window identifiers for better visibility
@@ -77,6 +78,31 @@ With default settings, the following keybindings are available (after pressing y
 - `prefix` + <kbd>W</kbd> - Fuzzy find and switch to a window (with zoom)
 - `prefix` + <kbd>F</kbd> - Fuzzy find and switch to a Neovim buffer (with zoom) (needs fuzzmax.nvim plugin)
 
+**Pane jumplist (back/forward):**
+- `prefix` + <kbd>Ctrl-h</kbd> - Jump **back** to the previously focused pane
+- `prefix` + <kbd>Ctrl-l</kbd> - Jump **forward** again
+
+**Neovim broadcast:**
+- `prefix` + <kbd>b</kbd> - Broadcast a Neovim command to all tracked instances (needs fuzzmux.nvim)
+
+## Pane Jumplist
+
+Navigate the history of focused panes like a browser's back/forward buttons (or
+Vim's jumplist). Every time the active pane changes - by any means (clicking,
+switching windows/sessions, or fuzzmux's own switchers) - it is recorded in a
+single **global** history shared across all sessions, windows, and panes.
+
+- `prefix` + <kbd>Ctrl-h</kbd> walks **back** toward older panes; `prefix` +
+  <kbd>Ctrl-l</kbd> walks **forward** again (mnemonic: Vim's `h`/`l`).
+- Focusing a *new* pane after going back discards the forward history, exactly
+  like navigating somewhere new in a browser.
+- Panes closed since being recorded are skipped and pruned automatically.
+- History is capped (default 100 entries) and kept in a per-server file under
+  `$XDG_RUNTIME_DIR`/`$TMPDIR` that is discarded when the tmux server exits.
+
+The bindings sit behind your tmux prefix, so they never interfere with Neovim's
+own `Ctrl-h`/`Ctrl-l` window navigation.
+
 ## Custom Commands
 
 ### fuzzmux-broadcast-nvim
@@ -97,7 +123,7 @@ When executed, you'll be prompted to enter a Neovim command (e.g., `set number`)
 
 **Setting a keybinding:**
 
-To set a keybinding for the broadcast command, add the `@fuzzmux-bind-broadcast-nvim` option to your tmux configuration (note: no default binding is set):
+The broadcast command is bound to `prefix` + <kbd>b</kbd> by default. Override it with the `@fuzzmux-bind-broadcast-nvim` option:
 
 ```tmux
 # Example: Prefix + Ctrl-B
@@ -158,6 +184,10 @@ set -g @fuzzmux-session-enabled '0'   # Disable session switcher
 set -g @fuzzmux-pane-enabled '0'      # Disable pane switcher
 set -g @fuzzmux-window-enabled '0'    # Disable window switcher
 set -g @fuzzmux-nvim-enabled '0'      # Disable nvim buffer switcher
+set -g @fuzzmux-jumplist-enabled '0'  # Disable pane jumplist (removes its hooks)
+
+# Pane jumplist history cap (default 100)
+set -g @fuzzmux-jumplist-max '100'
 
 # Disable preview for specific features (all enabled by default)
 set -g @fuzzmux-session-preview-enabled '0'
@@ -241,8 +271,11 @@ set -g @fuzzmux-bind-window 'w'         # prefix + w for windows
 set -g @fuzzmux-bind-window-zoom 'W'    # prefix + W for windows with zoom
 set -g @fuzzmux-bind-nvim 'f'           # prefix + f for nvim buffers
 set -g @fuzzmux-bind-nvim-zoom 'F'      # prefix + F for nvim buffers with zoom
+set -g @fuzzmux-bind-jump-back 'C-h'    # prefix + Ctrl-h to jump back
+set -g @fuzzmux-bind-jump-forward 'C-l' # prefix + Ctrl-l to jump forward
 
-# Bind broadcast-nvim command (no default)
+# Broadcast-nvim command (default: prefix + b)
+set -g @fuzzmux-bind-broadcast-nvim 'b'    # prefix + b for nvim broadcast
 set -g @fuzzmux-bind-broadcast-nvim '!M-x' # Alt+x without prefix for nvim broadcast
 
 # Use '!' prefix for bindings without tmux prefix (e.g., Alt+key combinations)
@@ -276,8 +309,8 @@ bind-key -n M-F run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_nvim_buffer_swit
 **Note:** When using custom bindings, the scripts **don't respect** global configuration settings (`@fuzzmux-popup-*`, `@fuzzmux-colors-enabled`, `@fuzzmux-<feature>-preview-enabled`) automatically. You need to add the desired options (`--preview`, `--colors`, `--zoom`, etc.) directly to the command.
 
 **Note on `@fuzzmux-bind-broadcast-nvim`:**
-- Unlike other fuzzmux features, the broadcast-nvim command has **no default keybinding**
-- Set `@fuzzmux-bind-broadcast-nvim` to enable it
+- The broadcast-nvim command is bound to `prefix` + <kbd>b</kbd> by default
+- Set `@fuzzmux-bind-broadcast-nvim` to override the key
 - Examples: `set -g @fuzzmux-bind-broadcast-nvim 'C-b'` or `set -g @fuzzmux-bind-broadcast-nvim '!M-x'`
 
 ### Command Line Options
