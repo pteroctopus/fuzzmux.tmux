@@ -29,9 +29,10 @@ fi
 
 command -v bat >/dev/null 2>&1 || tmux display-message "fuzzmux.tmux: WARNING - bat not found (optional, for better previews)"
 command -v column >/dev/null 2>&1 || tmux display-message "fuzzmux.tmux: WARNING - column not found (optional, for formatting)"
+command -v jq >/dev/null 2>&1 || tmux display-message "fuzzmux.tmux: WARNING - jq not found (optional, for Claude Code agent detection)"
 
 # Unbind previous keys
-for key in session session-zoom pane pane-zoom window window-zoom nvim nvim-zoom jump-back jump-forward; do
+for key in session session-zoom pane pane-zoom window window-zoom nvim nvim-zoom claude claude-zoom jump-back jump-forward; do
   prev_key=$(get_tmux_option "@fuzzmux-prev-bind-${key}" "")
   if [[ -n "$prev_key" ]]; then
     # Handle '!' prefix marker for root table bindings
@@ -58,6 +59,8 @@ declare -A FUZZMUX_DEFAULT_KEYS=(
   [window-zoom]=W
   [nvim]=f
   [nvim-zoom]=F
+  [claude]=a
+  [claude-zoom]=A
   [fzf-bind-filtering]=ctrl-f
 )
 
@@ -137,36 +140,37 @@ bind_feature() {
   tmux set-option -g "@fuzzmux-prev-bind-${feature}-zoom" "$key_zoom_raw"
 }
 
-# Jumplist hooks fired on active-pane change. Listed once so install and removal
-# stay in sync.
-JUMPLIST_HOOKS=(pane-focus-in after-select-pane after-select-window \
+# Focus hooks fired on active-pane change, shared by the jumplist recorder and
+# the Claude Code "seen" tracker. Listed once so install and removal stay in sync.
+FOCUS_HOOKS=(pane-focus-in after-select-pane after-select-window \
   client-session-changed session-window-changed)
 
-# Install focus-tracking hooks (idempotent: a global flag survives config reload,
-# so re-sourcing ~/.tmux.conf does not append our hooks twice).
-install_jumplist_hooks() {
-  [[ "$(get_tmux_option '@fuzzmux-jumplist-installed' '0')" == "1" ]] && return
+# Install <script> on every focus hook (idempotent: the <flag> global option
+# survives config reload, so re-sourcing ~/.tmux.conf does not append twice).
+install_focus_hooks() {
+  local script=$1 flag=$2 h
+  [[ "$(get_tmux_option "$flag" '0')" == "1" ]] && return
   tmux set -g focus-events on
-  local h
-  for h in "${JUMPLIST_HOOKS[@]}"; do
-    tmux set-hook -ga "$h" "run-shell -b '${PLUGIN_DIR}/bin/jumplist_record.sh #{pane_id}'"
+  for h in "${FOCUS_HOOKS[@]}"; do
+    tmux set-hook -ga "$h" "run-shell -b '${PLUGIN_DIR}/bin/${script} #{pane_id}'"
   done
-  tmux set-option -g @fuzzmux-jumplist-installed 1
+  tmux set-option -g "$flag" 1
 }
 
-# Remove only our hooks, preserving any user hooks on the same events. Scans both
-# server (-g) and window (-gw) scopes because pane-focus-in is a window hook.
-# Re-reads each pass so index shifts from prior removals are handled.
-remove_jumplist_hooks() {
-  local line hook idx
-  while line="$({ tmux show-hooks -g; tmux show-hooks -gw; } 2>/dev/null | grep -m1 'jumplist_record.sh')"; do
+# Remove only the hooks running <script>, preserving user hooks and the other
+# feature's hooks on the same events. Scans both server (-g) and window (-gw)
+# scopes because pane-focus-in is a window hook. Re-reads each pass so index
+# shifts from prior removals are handled.
+remove_focus_hooks() {
+  local script=$1 flag=$2 line hook idx
+  while line="$({ tmux show-hooks -g; tmux show-hooks -gw; } 2>/dev/null | grep -m1 "$script")"; do
     [[ -z "$line" ]] && break
     hook="${line%%\[*}"
     idx="${line#*\[}"
     idx="${idx%%\]*}"
     tmux set-hook -gu "${hook}[${idx}]" 2>/dev/null || true
   done
-  tmux set-option -gu @fuzzmux-jumplist-installed 2>/dev/null || true
+  tmux set-option -gu "$flag" 2>/dev/null || true
 }
 
 # Bind a single jumplist direction, honouring the '!' no-prefix marker.
@@ -198,9 +202,10 @@ if [[ "$(get_tmux_option '@fuzzmux-enable-bindings' '1')" == "1" ]]; then
   bind_feature pane fzf_pane_switcher.sh @fuzzmux-bind-pane @fuzzmux-bind-pane-zoom
   bind_feature window fzf_window_switcher.sh @fuzzmux-bind-window @fuzzmux-bind-window-zoom
   bind_feature nvim fzf_nvim_buffer_switcher.sh @fuzzmux-bind-nvim @fuzzmux-bind-nvim-zoom
+  bind_feature claude fzf_claude_switcher.sh @fuzzmux-bind-claude @fuzzmux-bind-claude-zoom
 else
   # Clear stored bind options when bindings are disabled (clean slate)
-  for key in session session-zoom pane pane-zoom window window-zoom nvim nvim-zoom jump-back jump-forward; do
+  for key in session session-zoom pane pane-zoom window window-zoom nvim nvim-zoom claude claude-zoom jump-back jump-forward; do
     tmux set-option -gu "@fuzzmux-prev-bind-${key}" 2>/dev/null || true
   done
 fi
@@ -209,14 +214,23 @@ fi
 # Hooks track history independently of the binding toggle; the jump keys are
 # only bound when bindings are also enabled.
 if [[ "$(get_tmux_option '@fuzzmux-jumplist-enabled' '1')" == "1" ]]; then
-  install_jumplist_hooks
+  install_focus_hooks jumplist_record.sh @fuzzmux-jumplist-installed
   if [[ "$(get_tmux_option '@fuzzmux-enable-bindings' '1')" == "1" ]]; then
     bind_jumplist
   fi
 else
-  remove_jumplist_hooks
+  remove_focus_hooks jumplist_record.sh @fuzzmux-jumplist-installed
   tmux set-option -gu @fuzzmux-prev-bind-jump-back 2>/dev/null || true
   tmux set-option -gu @fuzzmux-prev-bind-jump-forward 2>/dev/null || true
+fi
+
+# --- Claude Code "seen" tracking ---
+# Focusing an agent's pane turns an unread finished turn ("waiting") into
+# "idle". Tracks independently of the binding toggle, like the jumplist.
+if [[ "$(get_tmux_option '@fuzzmux-claude-enabled' '1')" == "1" ]]; then
+  install_focus_hooks claude_focus.sh @fuzzmux-claude-focus-installed
+else
+  remove_focus_hooks claude_focus.sh @fuzzmux-claude-focus-installed
 fi
 
 tmux display-message "fuzzmux.tmux: Plugin loaded successfully"

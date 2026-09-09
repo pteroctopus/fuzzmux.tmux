@@ -1,8 +1,8 @@
 # fuzzmux.tmux
 
-Created to solve the problem of quickly navigating between tmux panes, windows, and Neovim buffers using fuzzy finding.
+Created to solve the problem of quickly navigating between tmux panes, windows, Neovim buffers and Claude Code agents using fuzzy finding.
 
-A tmux plugin that provides fuzzy-finding capabilities for tmux panes, windows, and Neovim buffers using [fzf](https://github.com/junegunn/fzf).
+A tmux plugin that provides fuzzy-finding capabilities for tmux panes, windows, Neovim buffers and [Claude Code](https://code.claude.com) agents using [fzf](https://github.com/junegunn/fzf).
 Works with [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim) to track and switch between Neovim buffers across tmux panes.
 
 ## Features
@@ -13,6 +13,8 @@ Works with [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim) to track 
 - **Fuzzy find Neovim buffers** - Switch to Neovim buffers across different panes **(requires [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim))**
 - **Broadcast Neovim commands** - Send commands to all active Neovim instances across tmux panes **(requires [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim))**
 - **Pane jumplist** - Browser/Vim-style back/forward navigation through your focused-pane history (global across all sessions)
+- **Fuzzy find Claude Code agents** - Switch between [Claude Code](https://code.claude.com) instances running in any pane of any session, most urgent first (permission prompt, question, finished turn, working)
+- **Claude Code notifications** - Optional Claude Code hooks show a tmux status-line message the moment an agent needs your input, plus a status-line summary snippet
 - **Progressive filtering** - Use a single key (default `ctrl-f`) to progressively filter results by session, window, or pane
 - **Active/attached markers** - Visual `*` indicator in the first column showing attached sessions, active windows, and active panes
 - **Colorized output** - Color-coded session/window identifiers for better visibility
@@ -30,7 +32,9 @@ https://github.com/user-attachments/assets/593dd544-7c35-41aa-b9ff-09fdce9b9b81
 - **fzf** (required) - [Installation instructions](https://github.com/junegunn/fzf#installation)
 - **bat** (optional) - For enhanced file previews in Neovim buffer switcher
 - **column** (required) - For better formatting of lists
+- **jq** (optional) - For Claude Code agent detection and the hook installer
 - **fuzzmux.nvim** (optional but HIGHLY recommended) - Required for Neovim buffer tracking functionality
+- **Claude Code** (optional) - A 2.1.x release that writes `~/.claude/sessions/<pid>.json` state files (the same data `claude agents --json` shows); required only for the Claude Code agent switcher
 
 ## Installation
 
@@ -53,7 +57,7 @@ git clone https://github.com/pteroctopus/fuzzmux.tmux ~/.tmux/plugins/fuzzmux.tm
 Add to `~/.tmux.conf`:
 
 ```tmux
-run-shell ~/.tmux/plugins/fuzzmux.tmux/plugin.tmux
+run-shell ~/.tmux/plugins/fuzzmux.tmux/fuzzmux.tmux
 ```
 
 Reload tmux config:
@@ -61,6 +65,21 @@ Reload tmux config:
 ```bash
 tmux source-file ~/.tmux.conf
 ```
+
+### Optional: Claude Code integration
+
+The Claude Code agent switcher works right after installation (it needs `jq`).
+If you also want to be notified when an agent needs you, and the finer states
+(`permission`, `question`, unread vs. seen), register the plugin's Claude Code
+hooks once:
+
+```bash
+~/.tmux/plugins/fuzzmux.tmux/bin/claude_hooks_install.sh
+```
+
+It merges a few command hooks into `~/.claude/settings.json`, keeps a backup and
+leaves your other hooks alone; `--dry-run` shows the change first and
+`--uninstall` removes it. Details in [Claude Code Agents](#claude-code-agents).
 
 ## Default Key Bindings
 
@@ -71,12 +90,14 @@ With default settings, the following keybindings are available (after pressing y
 - `prefix` + <kbd>p</kbd> - Fuzzy find and switch to a pane
 - `prefix` + <kbd>w</kbd> - Fuzzy find and switch to a window
 - `prefix` + <kbd>f</kbd> - Fuzzy find and switch to a Neovim buffer (needs fuzzmax.nvim plugin)
+- `prefix` + <kbd>a</kbd> - Fuzzy find and switch to a Claude Code agent
 
 **With zoom (uppercase keys):**
 - `prefix` + <kbd>S</kbd> - Fuzzy find and switch to a session (with zoom)
 - `prefix` + <kbd>P</kbd> - Fuzzy find and switch to a pane (with zoom)
 - `prefix` + <kbd>W</kbd> - Fuzzy find and switch to a window (with zoom)
 - `prefix` + <kbd>F</kbd> - Fuzzy find and switch to a Neovim buffer (with zoom) (needs fuzzmax.nvim plugin)
+- `prefix` + <kbd>A</kbd> - Fuzzy find and switch to a Claude Code agent (with zoom)
 
 **Pane jumplist (back/forward):**
 - `prefix` + <kbd>Ctrl-h</kbd> - Jump **back** to the previously focused pane
@@ -102,6 +123,164 @@ single **global** history shared across all sessions, windows, and panes.
 
 The bindings sit behind your tmux prefix, so they never interfere with Neovim's
 own `Ctrl-h`/`Ctrl-l` window navigation.
+
+## Claude Code Agents
+
+Press `prefix` + <kbd>a</kbd> to list every [Claude Code](https://code.claude.com)
+instance running in a tmux pane, across all sessions, most urgent first:
+
+```
+  permission (Bash)  2m   @api   #1  %2  manual  Fix flaky integration test  ~/Development/api
+  question           40s  @docs  #0  %1  auto    Rewrite quick start         ~/Development/docs
++ waiting            14m  @app   #2  %1  plan    Rotate the staging certs    ~/Development/app
+* working            5s   @app   #2  %0  edits   Refactor auth middleware    ~/Development/app
+```
+
+Columns: marker, state, time spent in that state, session, window, pane,
+Claude's permission mode, the agent's title (Claude Code's own pane title) and
+its working directory. The marker is `*` for the pane you opened the popup
+from and `+` for another pane of the same window, so you can tell an agent that
+is already on your screen from one that needs a switch; rows in your current
+session show the session name in bold. Press <kbd>Enter</kbd> to switch to the
+agent.
+
+The mode column shows how much the agent may do on its own: `manual` (Claude's
+`default`, asks for every tool), `edits` (`acceptEdits`), `plan`, `auto`,
+`dontask` and `bypass` (`bypassPermissions`). It comes from the hook payloads,
+follows mode switches (<kbd>Shift-Tab</kbd>) at the agent's next event, and
+shows `-` for agents without hook data.
+
+With preview enabled, the preview shows the bottom of the agent's pane, where
+Claude's output and prompt live.
+
+States, in the order they are listed:
+
+| State        | Meaning                                                        |
+|--------------|----------------------------------------------------------------|
+| `permission` | A tool call waits for your approval (tool name in parentheses) |
+| `question`   | Claude asked you a question                                    |
+| `waiting`    | Claude finished a turn that you have not looked at yet         |
+| `working`    | Claude is busy                                                 |
+| `idle`       | At the prompt with nothing unread: fresh or resumed session, or a finished turn you already looked at |
+
+`waiting` clears itself the moment you focus the agent's pane, by whatever
+means (this switcher, the pane switcher, a click, a window change): the plugin
+installs tmux focus hooks for that, the same way the pane jumplist does. A turn
+that finishes while you are looking at its pane goes straight to `idle`.
+`permission` and `question` stay until you answer, whether you looked or not.
+So `waiting` in the picker, the `Ctrl-f` filter and the `*N` status count all
+mean "finished something you have not seen".
+
+**Searching:** This switcher uses fzf's exact (substring) matching, so typing
+`waiting` lists exactly the waiting agents and `cop` the ones whose session,
+title or path contains it. Prefix a term with `'` for fuzzy matching. Session
+names, window and pane numbers, titles and paths are all searchable; the hidden
+pane id is not.
+
+**Filtering:** Press <kbd>Ctrl-f</kbd> (default) to show only the agents that
+need you (`permission`, `question`, `waiting`); press again to show all.
+
+**Colors:** The state column and the status-line summary share four tmux
+styles, using your terminal's named colors by default. Override them with tmux
+`STYLES` syntax (names, `brightgreen`, `colour208`, `#rrggbb`, `bold`, `dim`,
+`reverse`, ...):
+
+```tmux
+set -g @fuzzmux-claude-attention-style 'fg=red,bold'   # permission, question
+set -g @fuzzmux-claude-waiting-style 'fg=yellow'       # finished turn
+set -g @fuzzmux-claude-working-style 'fg=brightgreen'  # busy
+set -g @fuzzmux-claude-idle-style 'dim'                # fresh session
+
+# Rose Pine example
+set -g @fuzzmux-claude-attention-style 'fg=#eb6f92,bold'
+set -g @fuzzmux-claude-waiting-style 'fg=#f6c177'
+set -g @fuzzmux-claude-working-style 'fg=#9ccfd8'
+```
+
+The session/window/pane columns keep following `@fuzzmux-color-palette` like the
+other switchers, and `@fuzzmux-colors-enabled '0'` turns everything plain.
+
+### How agents are detected
+
+No setup is needed for the switcher. Claude Code writes a state file for every
+running instance (`~/.claude/sessions/<pid>.json`, honouring
+`$CLAUDE_CONFIG_DIR`) that records the tmux pane it runs in and whether it is
+busy or idle; fuzzmux reads those files with `jq` and drops entries whose
+process or pane is gone. Without the hooks below, agents are only `working` or
+`idle`: Claude Code alone cannot tell a pending permission prompt from ordinary
+work, nor an unread finished turn from one you already looked at.
+
+The optional hooks refine this: they record the exact state as pane user options
+(`@fuzzmux-claude-state`, `@fuzzmux-claude-since`, `@fuzzmux-claude-detail`,
+`@fuzzmux-claude-mode`) the moment an event happens. When both sources exist, the hook state wins whenever
+the two agree on busy/idle; otherwise the more recent source wins, which covers
+an interrupted turn (<kbd>Esc</kbd> fires no `Stop` hook) and a permission
+prompt (still "busy" in the state file).
+
+### Notifications when an agent needs you
+
+Claude Code hooks are the only event-driven signal available, so notifications
+need a small piece of Claude Code configuration. Install it with:
+
+```bash
+~/.tmux/plugins/fuzzmux.tmux/bin/claude_hooks_install.sh
+```
+
+The installer merges command hooks into `~/.claude/settings.json` (a backup is
+written next to it; existing hooks are preserved and earlier fuzzmux entries are
+replaced, so re-running after a plugin update or move is safe). It registers
+`bin/claude_hook.sh` for `SessionStart`, `UserPromptSubmit`, `PermissionRequest`,
+`Notification` (`permission_prompt`, `idle_prompt`), `PreToolUse`
+(`AskUserQuestion`), `PostToolUse`, `PostToolUseFailure`, `Stop` and
+`SessionEnd`. New Claude Code sessions pick the hooks up immediately; sessions
+started earlier are tracked from their next event. Verify inside Claude Code
+with `/hooks`.
+
+Whenever an agent enters `permission`, `question` or `waiting`, every attached
+client shows a message in its status line for a few seconds, for example:
+
+```
+Claude needs permission for Bash: @api #1.%2 (Fix flaky integration test)
+```
+
+The message is skipped when you are already looking at that pane. Options:
+
+```tmux
+set -g @fuzzmux-claude-notify '0'            # no messages (state tracking stays on)
+set -g @fuzzmux-claude-notify-focused '1'    # also notify for the pane you are viewing
+set -g @fuzzmux-claude-notify-duration '8000' # milliseconds (default 5000)
+set -g @fuzzmux-claude-notify-bell '1'       # also ring the pane's bell (see below)
+```
+
+The bell goes through tmux's normal alert path, so it follows tmux's scope: with
+`monitor-bell on` the agent's window is highlighted in the window list of *its*
+session, and the terminal bell reaches clients attached to *that* session
+(`bell-action`). An agent finishing in another session rings nothing where you
+are; the status-line count below covers that case.
+
+Installer options: `--settings <file>` (for example `.claude/settings.json` for
+project scope), `--dry-run` (show the diff), `--print` (print the JSON fragment
+for manual editing), `--uninstall`.
+
+The hook script exits silently when Claude Code is not running inside tmux
+(`$TMUX_PANE` unset) and never fails, so it cannot interfere with Claude Code.
+`claude --bare` skips all hooks. Background agents (`claude --bg`) have no pane
+and are not listed.
+
+### Status-line summary
+
+`bin/claude_status.sh` prints a compact summary for a `#()` in your status line:
+
+```tmux
+set -g status-right '#(~/.tmux/plugins/fuzzmux.tmux/bin/claude_status.sh) %H:%M'
+```
+
+Output like `!2 *1 ~3` means two agents need you (permission or question), one
+is waiting for input and three are working; nothing is printed when no agent
+runs. It refreshes with `status-interval`, so a short interval such as `5` keeps
+it current. Each group is wrapped in the matching `@fuzzmux-claude-*-style` (see
+Colors above). Options: `--no-colors`, `--idle` (also count idle agents as
+`.N`), `--prefix=<text>`.
 
 ## Custom Commands
 
@@ -184,6 +363,7 @@ set -g @fuzzmux-session-enabled '0'   # Disable session switcher
 set -g @fuzzmux-pane-enabled '0'      # Disable pane switcher
 set -g @fuzzmux-window-enabled '0'    # Disable window switcher
 set -g @fuzzmux-nvim-enabled '0'      # Disable nvim buffer switcher
+set -g @fuzzmux-claude-enabled '0'    # Disable Claude Code agent switcher (removes its focus hooks)
 set -g @fuzzmux-jumplist-enabled '0'  # Disable pane jumplist (removes its hooks)
 
 # Pane jumplist history cap (default 100)
@@ -194,6 +374,7 @@ set -g @fuzzmux-session-preview-enabled '0'
 set -g @fuzzmux-pane-preview-enabled '0'
 set -g @fuzzmux-window-preview-enabled '0'
 set -g @fuzzmux-nvim-preview-enabled '0'
+set -g @fuzzmux-claude-preview-enabled '0'
 ```
 
 ### Popup Appearance
@@ -216,6 +397,7 @@ set -g @fuzzmux-session-preview-window 'right:30%'
 set -g @fuzzmux-pane-preview-window 'right:30%'
 set -g @fuzzmux-window-preview-window 'right:30%'
 set -g @fuzzmux-nvim-preview-window 'right:30%'
+set -g @fuzzmux-claude-preview-window 'right:50%' # agent output is wide; give it room
 ```
 
 ### Color Customization
@@ -239,6 +421,8 @@ set -g @fuzzmux-color-palette '#f7768e,#9ece6a,#e0af68,#7aa2f7,#bb9af7,#7dcfff'
 
 **Note:** When `@fuzzmux-color-palette` is not set or is empty, fuzzmux uses your terminal's default ANSI colors (red, green, yellow, blue, magenta, cyan), which automatically adapt to your terminal's color scheme.
 
+The Claude Code agent states (`permission`, `waiting`, `working`, `idle`) have their own four `@fuzzmux-claude-*-style` options in tmux style syntax; see [Claude Code Agents](#claude-code-agents).
+
 ### Progressive Filtering
 
 Customize the fzf filtering keybinding. Press the key repeatedly to cycle through filter levels:
@@ -256,6 +440,7 @@ set -g @fuzzmux-fzf-bind-filtering 'alt-f'
 - **Window switcher**: Press once to filter by current session, press again to clear
 - **Pane switcher**: Press 1st for session filter, 2nd for window filter, 3rd to clear
 - **Nvim buffer switcher**: Press 1st for session, 2nd for window, 3rd for pane, 4th to clear
+- **Claude Code agent switcher**: Press once to show only agents that need you, press again to clear
 
 ### Custom Key Bindings
 
@@ -271,6 +456,8 @@ set -g @fuzzmux-bind-window 'w'         # prefix + w for windows
 set -g @fuzzmux-bind-window-zoom 'W'    # prefix + W for windows with zoom
 set -g @fuzzmux-bind-nvim 'f'           # prefix + f for nvim buffers
 set -g @fuzzmux-bind-nvim-zoom 'F'      # prefix + F for nvim buffers with zoom
+set -g @fuzzmux-bind-claude 'a'         # prefix + a for Claude Code agents
+set -g @fuzzmux-bind-claude-zoom 'A'    # prefix + A for Claude Code agents with zoom
 set -g @fuzzmux-bind-jump-back 'C-h'    # prefix + Ctrl-h to jump back
 set -g @fuzzmux-bind-jump-forward 'C-l' # prefix + Ctrl-l to jump forward
 
@@ -287,6 +474,8 @@ set -g @fuzzmux-bind-window '!M-w'       # Alt+w without prefix for windows
 set -g @fuzzmux-bind-window-zoom '!M-W'  # Alt+Shift+w without prefix for windows with zoom
 set -g @fuzzmux-bind-nvim '!M-f'         # Alt+f without prefix for nvim buffers
 set -g @fuzzmux-bind-nvim-zoom '!M-F'    # Alt+Shift+f without prefix for nvim buffers with zoom
+set -g @fuzzmux-bind-claude '!M-c'       # Alt+c without prefix for Claude Code agents
+set -g @fuzzmux-bind-claude-zoom '!M-C'  # Alt+Shift+c without prefix for Claude Code agents with zoom
 ```
 
 Or set up completely custom bindings:
@@ -304,6 +493,8 @@ bind-key -n M-w run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_window_switcher.
 bind-key -n M-W run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_window_switcher.sh --zoom"
 bind-key -n M-f run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_nvim_buffer_switcher.sh"
 bind-key -n M-F run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_nvim_buffer_switcher.sh --zoom"
+bind-key -n M-c run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_claude_switcher.sh"
+bind-key -n M-C run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_claude_switcher.sh --zoom"
 ```
 
 **Note:** When using custom bindings, the scripts **don't respect** global configuration settings (`@fuzzmux-popup-*`, `@fuzzmux-colors-enabled`, `@fuzzmux-<feature>-preview-enabled`) automatically. You need to add the desired options (`--preview`, `--colors`, `--zoom`, etc.) directly to the command.
@@ -325,6 +516,10 @@ Each script accepts the following options when called manually:
 - `--popup-border=<style>` - Set border style (default: rounded)
 - `--popup-color=<color>` - Set border color (default: white)
 - `--color-palette=<colors>` - Set custom color palette (comma-separated hex colors)
+- `--preview-window=<position:size>` - Place the fzf preview (default: right:30%)
+- `--fzf-bind=<key>` - Key for the in-popup filter (default: ctrl-f)
+
+`bin/claude_status.sh` and `bin/claude_hooks_install.sh` have their own flags, listed in [Claude Code Agents](#claude-code-agents).
 
 Example with custom colors:
 ```bash
@@ -414,6 +609,11 @@ When you select a buffer:
 - 3rd press: Show only buffers from current pane
 - 4th press: Clear filter (show all buffers)
 
+### Claude Code Agent Switcher
+
+Press `prefix` + <kbd>a</kbd>; the list, states, markers and filtering are
+described in [Claude Code Agents](#claude-code-agents).
+
 ## Troubleshooting
 
 ### "fzf is not installed" error
@@ -451,6 +651,29 @@ This means either:
 3. No buffers are open in the running Neovim instances
 
 To fix: Install [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim) and ensure Neovim is running.
+
+### "No Claude Code agents found" message
+
+This means one of:
+1. No Claude Code instance is running inside a tmux pane (instances started outside tmux have no pane to switch to)
+2. `jq` is not installed, so the Claude Code state files cannot be read (only hook-tracked panes are listed then)
+3. Your Claude Code version does not write `~/.claude/sessions/<pid>.json` yet (check with `claude agents --json`)
+4. You use a custom `$CLAUDE_CONFIG_DIR` that is not visible to tmux's environment
+
+Installing the hooks (see [Claude Code Agents](#claude-code-agents)) makes detection independent of the state files.
+
+### Claude Code notifications do not appear
+
+- Check that the hooks are registered: run `/hooks` inside Claude Code, or `bin/claude_hooks_install.sh --dry-run`
+- The message is suppressed while you are looking at the agent's pane; set `@fuzzmux-claude-notify-focused '1'` to see it anyway
+- Sessions started before installing the hooks are tracked from their next event; `claude --bare` skips hooks entirely
+- `@fuzzmux-claude-notify-bell` only reaches the agent's own session (tmux alert scope); use the status-line summary for other sessions
+
+### Mode column shows only dashes
+
+The permission mode comes from hook payloads. Agents that have had no hook event
+since the hooks were installed (or since the plugin was updated) show `-` until
+their next prompt, tool call or finished turn.
 
 ### Preview not working for files
 
@@ -497,8 +720,26 @@ FUZZMUX_NVIM_SOCKET_<pane_id>="/path/to/nvim.socket"
 
 When switching buffers, fuzzmux.tmux uses Neovim's RPC socket to send buffer switching commands directly, providing instant and reliable buffer switching without relying on tmux send-keys.
 
+### Claude Code Integration
+
+Two sources are merged by `bin/claude_lib.sh`:
+
+1. **Claude Code state files** - `~/.claude/sessions/<pid>.json`, written by Claude Code itself for every running instance. fuzzmux reads `tmux` (`session:@window.%pane`), `status` (`busy`/`idle`), `statusUpdatedAt`, `name` and `cwd`, and skips files whose process is dead or whose pane is gone.
+2. **Pane user options** - written by `bin/claude_hook.sh` from Claude Code hooks. `$TMUX_PANE` is inherited by the hook from the Claude process, so the state lands on the right pane without any lookup, and disappears with the pane:
+   ```
+   @fuzzmux-claude-state   permission | question | waiting | working | idle
+   @fuzzmux-claude-since   epoch seconds when the state was entered
+   @fuzzmux-claude-detail  e.g. the tool awaiting permission
+   @fuzzmux-claude-mode    permission mode from the last hook payload
+   ```
+
+Hook events map to states as follows: `SessionStart` to `idle` (untouched for `compact`, which happens mid-turn); `UserPromptSubmit`, `PostToolUse` and `PostToolUseFailure` to `working`; `PermissionRequest` and `Notification(permission_prompt)` to `permission`; `PreToolUse(AskUserQuestion)` to `question`; `Stop` to `waiting`, or straight to `idle` when the pane is focused; `Notification(idle_prompt)` repeats the reminder for a `waiting` agent and turns a `working` one `idle` (an interrupted turn fires no `Stop`); `SessionEnd` clears the options. The notification is a `display-message -d` on every attached client, followed by `refresh-client -S`.
+
+`bin/claude_focus.sh` runs from the same tmux focus hooks as the jumplist recorder (`pane-focus-in`, `after-select-pane`, `after-select-window`, `client-session-changed`, `session-window-changed`) and flips the focused pane from `waiting` to `idle`. `init.sh` installs and removes both sets of hooks with the same helper, guarded by a global flag so a config reload never duplicates them.
+
 ## Related Projects
 
 - [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim) - Neovim plugin for buffer tracking
 - [fzf](https://github.com/junegunn/fzf) - Command-line fuzzy finder
 - [tmux](https://github.com/tmux/tmux) - Terminal multiplexer
+- [Claude Code](https://code.claude.com) - The agent the Claude Code switcher tracks; [hooks reference](https://code.claude.com/docs/en/hooks)
