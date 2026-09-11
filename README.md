@@ -338,9 +338,13 @@ last ran.
 The popup opens in **deep** mode (`deep >`): every keystroke sends the query to
 `ripgrep` over the full transcripts in `~/.claude/projects/`, so your prompts,
 Claude's answers and tool output all match, and each row ends with the matching
-snippet; results keep the newest-first order. Press <kbd>Ctrl-f</kbd> (the
-filter key) for `prompts >` mode, plain fzf filtering over the rows, where the
-appended prompt text makes any prompt wording match; press it again to go back.
+snippet; results keep the newest-first order. Matching follows fzf's habits:
+space-separated terms must all occur in the transcript, in any order; inside a
+term up to three arbitrary characters may separate consecutive query characters,
+so `wrapupcomplete` finds "wrapup complete" and "wrapUpComplete"; a term
+starting with `'` must occur exactly. Press <kbd>Ctrl-f</kbd> (the filter key)
+for `prompts >` mode, plain fzf filtering over the rows, where the appended
+prompt text makes any prompt wording match; press it again to go back.
 
 <kbd>Enter</kbd> on a running session switches to its pane. On a closed one it
 resumes the session with `claude --resume <id>` **where it last ran**: a new

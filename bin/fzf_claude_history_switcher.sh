@@ -104,15 +104,47 @@ if [[ "${1:-}" == "--deep" ]]; then
   # rg exits 1 on no match; not a failure here, and fzf shows "Command failed"
   # for any non-zero reload.
   set +o pipefail
-  # Pass 1: which transcripts contain the query (fixed string, one fast scan).
+
+  # fzf-like matching on top of ripgrep: space-separated terms must all occur
+  # in a transcript; inside a term up to three arbitrary characters may sit
+  # between consecutive query characters (so "wrapupcomplete" finds
+  # "wrapup complete"); a term starting with ' is an exact substring.
+  term_regex() {
+    local term=$1 exact=0 out="" i ch
+    [[ "$term" == \'* ]] && { exact=1; term="${term#\'}"; }
+    for ((i = 0; i < ${#term}; i++)); do
+      ch="${term:i:1}"
+      [[ "$ch" == [][\\.^\$*+?\(\)\{\}\|/] ]] && ch="\\$ch"
+      out+="$ch"
+      ((exact == 0 && i < ${#term} - 1)) && out+='.{0,3}'
+    done
+    printf '%s' "$out"
+  }
+  read -r -a terms <<<"$query"
+  ((${#terms[@]} > 0)) || exit 0
+
+  # Pass 1: transcripts matching every term (one fast scan per term).
   declare -A HIT
-  while IFS= read -r path; do
-    sid="${path##*/}"
-    HIT["${sid%.jsonl}"]="$path"
-  done < <(rg -l --no-messages -i -F --max-depth 2 -g '*.jsonl' -- "$query" "$PROJECTS" 2>/dev/null || true)
+  first=1
+  for term in "${terms[@]}"; do
+    regex="$(term_regex "$term")"
+    [[ -n "$regex" ]] || continue
+    declare -A THIS=()
+    while IFS= read -r path; do
+      sid="${path##*/}"
+      THIS["${sid%.jsonl}"]="$path"
+    done < <(rg -l --no-messages -i --max-depth 2 -g '*.jsonl' -e "$regex" "$PROJECTS" 2>/dev/null || true)
+    if ((first)); then
+      for sid in "${!THIS[@]}"; do HIT[$sid]="${THIS[$sid]}"; done
+      first=0
+    else
+      for sid in "${!HIT[@]}"; do [[ -n "${THIS[$sid]+set}" ]] || unset "HIT[$sid]"; done
+    fi
+    unset THIS
+  done
   # Pass 2: walk the metadata (newest session first) and fetch one snippet per
   # matching session, capped so a broad query stays quick.
-  esc="$(printf '%s' "$query" | sed 's/[][\\.^$*+?(){}|\/]/\\&/g')"
+  esc="$(term_regex "${terms[0]}")"
   shown=0
   while IFS="$DEL" read -r sid state age dir title; do
     [[ -n "${HIT[$sid]+set}" ]] || continue
