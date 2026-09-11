@@ -145,7 +145,7 @@ printf -v NOW '%(%s)T' -1
 # blank of the marker column on unmarked rows and shift the marked row.
 PANES=() MARKERS=() STATES=() LABELS=() AGES=() SESSIONS=() WINDOWS=() INDEXES=() MODES=() TITLES=() CWDS=()
 w_label=0 w_age=0 w_sess=0 w_win=0 w_idx=0 w_mode=0 w_title=0
-while IFS="$CLAUDE_DEL" read -r pane state since detail _name cwd sess win idx title _pa _wa _sa _src mode; do
+while IFS="$CLAUDE_DEL" read -r pane state since detail _name cwd sess win idx title _pa _wa _sa _src mode _sid; do
   active_marker=" "
   if [[ "$pane" == "$CURRENT_PANE_ID" ]]; then
     active_marker="*"
