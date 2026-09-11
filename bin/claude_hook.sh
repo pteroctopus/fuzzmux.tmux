@@ -202,6 +202,22 @@ session-end)
   ;;
 esac
 
+# Remember where this session runs, for resuming it in the same place later
+# (bin/fzf_claude_history_switcher.sh). Appended, never rewritten, so
+# concurrent hooks cannot clobber each other; readers keep the last line per
+# session id. Only on the events that matter, not on every tool call.
+case "$event" in
+session-start | prompt | stop)
+  sid="$(json_field session_id)"
+  if [ -n "$sid" ]; then
+    registry="${XDG_STATE_HOME:-$HOME/.local/state}/fuzzmux/claude-sessions.log"
+    mkdir -p "${registry%/*}" 2>/dev/null
+    loc="$(tmux display-message -p -t "$pane" "#{session_name}${US}#{window_id}${US}#{window_index}" 2>/dev/null)"
+    [ -n "$loc" ] && printf '%s\n' "${sid}${US}${loc}${US}${pane}${US}$(json_field cwd)${US}$(date +%s)" >>"$registry" 2>/dev/null
+  fi
+  ;;
+esac
+
 # Record the state in one tmux call; keep @fuzzmux-claude-since when the state
 # did not change. The permission mode rides along whenever the payload has it.
 mode="$(json_field permission_mode)"

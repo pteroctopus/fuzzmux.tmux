@@ -93,6 +93,7 @@ With default settings, the following keybindings are available (after pressing y
 - `prefix` + <kbd>w</kbd> - Fuzzy find and switch to a window
 - `prefix` + <kbd>f</kbd> - Fuzzy find and switch to a Neovim buffer (needs fuzzmax.nvim plugin)
 - `prefix` + <kbd>a</kbd> - Fuzzy find and switch to a Claude Code agent
+- `prefix` + <kbd>y</kbd> - Search all Claude Code sessions ever run and switch to or resume one
 
 **With zoom (uppercase keys):**
 - `prefix` + <kbd>S</kbd> - Fuzzy find and switch to a session (with zoom)
@@ -100,6 +101,7 @@ With default settings, the following keybindings are available (after pressing y
 - `prefix` + <kbd>W</kbd> - Fuzzy find and switch to a window (with zoom)
 - `prefix` + <kbd>F</kbd> - Fuzzy find and switch to a Neovim buffer (with zoom) (needs fuzzmax.nvim plugin)
 - `prefix` + <kbd>A</kbd> - Fuzzy find and switch to a Claude Code agent (with zoom)
+- `prefix` + <kbd>Y</kbd> - Search all Claude Code sessions and switch to or resume one (with zoom)
 
 **Pane jumplist (back/forward):**
 - `prefix` + <kbd>Ctrl-h</kbd> - Jump **back** to the previously focused pane
@@ -315,6 +317,44 @@ The hook script exits silently when Claude Code is not running inside tmux
 (`$TMUX_PANE` unset) and never fails, so it cannot interfere with Claude Code.
 `claude --bare` skips all hooks. Background agents (`claude --bg`) have no pane
 and are not listed.
+
+### Session history: find any past session and resume it in place
+
+Press `prefix` + <kbd>y</kbd> to search every Claude Code session you ever ran,
+not only the running ones:
+
+```
+  working   2m   ~/Development/app     Refactor auth middleware       │ refactor the auth middleware | now add tests | ...
+  closed    3h   ~/Development/api     Fix flaky integration test     │ fix the flaky integration test | add a retry with ...
+  closed    2d   ~/Development/infra   Rotate the staging certs       │ rotate the staging certs
+```
+
+Rows come from Claude Code's prompt history (`~/.claude/history.jsonl`), one per
+session, newest first: running state or `closed`, age of the last prompt,
+project directory, first prompt as title, and after the bar every prompt of the
+session, so typing words from any prompt finds it. The preview lists the
+session's prompts, newest first, and where it last ran.
+
+Press <kbd>Ctrl-f</kbd> (the filter key) to switch to **deep** mode: the query
+now goes to `ripgrep` over the full transcripts in `~/.claude/projects/`, so
+Claude's answers and tool output match too, and each row ends with the matching
+snippet. Press it again to return to prompt search.
+
+<kbd>Enter</kbd> on a running session switches to its pane. On a closed one it
+resumes the session with `claude --resume <id>` **where it last ran**: a new
+pane split into the window it used before, or if that window is gone a new
+window in that tmux session, or if that session is gone too a new window in your
+current session. The working directory is the session's project directory.
+The location comes from a small registry the hook appends to on every prompt
+and finished turn (`$XDG_STATE_HOME/fuzzmux/claude-sessions.log`, default
+`~/.local/state/...`); sessions from before the hooks were installed fall back
+to a new window in the current session.
+
+Options: `@fuzzmux-bind-claude-history` / `-zoom` (default `y` / `Y`),
+`@fuzzmux-claude-history-enabled`, `@fuzzmux-claude-history-preview-enabled`,
+`@fuzzmux-claude-history-preview-window`, and `@fuzzmux-claude-command` (the
+`claude` binary or wrapper to run, default `claude`). Requires `jq`; deep mode
+requires `ripgrep`.
 
 ### Status-line summary
 

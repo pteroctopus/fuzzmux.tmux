@@ -32,7 +32,7 @@ command -v column >/dev/null 2>&1 || tmux display-message "fuzzmux.tmux: WARNING
 command -v jq >/dev/null 2>&1 || tmux display-message "fuzzmux.tmux: WARNING - jq not found (optional, for Claude Code agent detection)"
 
 # Unbind previous keys
-for key in session session-zoom pane pane-zoom window window-zoom nvim nvim-zoom claude claude-zoom jump-back jump-forward; do
+for key in session session-zoom pane pane-zoom window window-zoom nvim nvim-zoom claude claude-zoom claude-history claude-history-zoom jump-back jump-forward; do
   prev_key=$(get_tmux_option "@fuzzmux-prev-bind-${key}" "")
   if [[ -n "$prev_key" ]]; then
     # Handle '!' prefix marker for root table bindings
@@ -61,6 +61,8 @@ declare -A FUZZMUX_DEFAULT_KEYS=(
   [nvim-zoom]=F
   [claude]=a
   [claude-zoom]=A
+  [claude-history]=y
+  [claude-history-zoom]=Y
   [fzf-bind-filtering]=ctrl-f
 )
 
@@ -203,9 +205,10 @@ if [[ "$(get_tmux_option '@fuzzmux-enable-bindings' '1')" == "1" ]]; then
   bind_feature window fzf_window_switcher.sh @fuzzmux-bind-window @fuzzmux-bind-window-zoom
   bind_feature nvim fzf_nvim_buffer_switcher.sh @fuzzmux-bind-nvim @fuzzmux-bind-nvim-zoom
   bind_feature claude fzf_claude_switcher.sh @fuzzmux-bind-claude @fuzzmux-bind-claude-zoom
+  bind_feature claude-history fzf_claude_history_switcher.sh @fuzzmux-bind-claude-history @fuzzmux-bind-claude-history-zoom
 else
   # Clear stored bind options when bindings are disabled (clean slate)
-  for key in session session-zoom pane pane-zoom window window-zoom nvim nvim-zoom claude claude-zoom jump-back jump-forward; do
+  for key in session session-zoom pane pane-zoom window window-zoom nvim nvim-zoom claude claude-zoom claude-history claude-history-zoom jump-back jump-forward; do
     tmux set-option -gu "@fuzzmux-prev-bind-${key}" 2>/dev/null || true
   done
 fi

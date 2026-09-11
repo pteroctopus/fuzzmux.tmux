@@ -32,7 +32,7 @@
 # fields separated by CLAUDE_DEL (ASCII unit separator - unlike a tab it is not
 # whitespace, so `read` keeps empty fields in place):
 #   pane_id state since detail name cwd session window pane_index title
-#   pane_active window_active session_attached source mode
+#   pane_active window_active session_attached source mode session_id
 
 CLAUDE_DEL=$'\x1f'
 # Claude Code prefixes its pane title with this glyph (U+2733, as UTF-8 bytes so
@@ -41,6 +41,13 @@ CLAUDE_TITLE_GLYPH="$(printf '\342\234\263')"
 
 claude_config_dir() {
   printf '%s' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+}
+
+# Where the hook records the last tmux location of every Claude session
+# (session id, tmux session, window id, window index, pane, cwd, epoch), one
+# appended line per event; readers take the last line per session id.
+claude_registry_file() {
+  printf '%s/fuzzmux/claude-sessions.log' "${XDG_STATE_HOME:-$HOME/.local/state}"
 }
 
 # Read a global tmux option, falling back to a default when unset/empty.
@@ -246,8 +253,8 @@ claude_agents_list() {
 
   # --- Claude Code state files (one jq call per file so a corrupt file cannot
   # take the others down).
-  local -A F_STATUS F_SINCE F_NAME F_CWD
-  local dir f row cpid fstatus fsince fname fcwd
+  local -A F_STATUS F_SINCE F_NAME F_CWD F_SID
+  local dir f row cpid fstatus fsince fname fcwd fsid
   dir="$(claude_config_dir)/sessions"
   if command -v jq >/dev/null 2>&1 && [[ -d "$dir" ]]; then
     for f in "$dir"/*.json; do
@@ -257,10 +264,10 @@ claude_agents_list() {
                and ((.tmux // "") | type) == "string" and (.tmux // "") != "")
         | [ (.pid | tostring), (.tmux | split(".") | last), (.status // ""),
             ((.statusUpdatedAt // .updatedAt // .startedAt // 0) | tostring),
-            (.name // ""), (.cwd // "") ]
+            (.name // ""), (.cwd // ""), (.sessionId // "") ]
         | map(tostring) | join("\u001f")' "$f" 2>/dev/null)" || continue
       [[ -n "$row" ]] || continue
-      IFS="$DEL" read -r cpid pane fstatus fsince fname fcwd <<<"$row"
+      IFS="$DEL" read -r cpid pane fstatus fsince fname fcwd fsid <<<"$row"
       [[ "$cpid" =~ ^[0-9]+$ && "$pane" =~ ^%[0-9]+$ ]] || continue
       kill -0 "$cpid" 2>/dev/null || continue # process gone: stale file
       [[ -n "${P_SESSION[$pane]:-}" ]] || continue # pane gone
@@ -270,6 +277,7 @@ claude_agents_list() {
       F_SINCE[$pane]=$fsince
       F_NAME[$pane]=$fname
       F_CWD[$pane]=$fcwd
+      F_SID[$pane]=$fsid
     done
   fi
 
@@ -324,7 +332,7 @@ claude_agents_list() {
     out+="${P_SESSION[$pane]}${DEL}${P_WINDOW[$pane]}${DEL}${P_INDEX[$pane]}${DEL}"
     out+="$(claude_clean_title "${P_TITLE[$pane]}")${DEL}"
     out+="${P_ACTIVE[$pane]}${DEL}${P_WACTIVE[$pane]}${DEL}${P_ATTACHED[$pane]}${DEL}${origin}${DEL}"
-    out+="${P_MODE[$pane]:-}"$'\n'
+    out+="${P_MODE[$pane]:-}${DEL}${F_SID[$pane]:-}"$'\n'
   done
 
   [[ -n "$out" ]] || return 0
