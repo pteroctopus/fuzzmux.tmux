@@ -332,13 +332,15 @@ not only the running ones:
 Rows come from Claude Code's prompt history (`~/.claude/history.jsonl`), one per
 session, newest first: running state or `closed`, age of the last prompt,
 project directory, first prompt as title, and after the bar every prompt of the
-session, so typing words from any prompt finds it. The preview lists the
-session's prompts, newest first, and where it last ran.
+session. The preview lists the session's prompts, newest first, and where it
+last ran.
 
-Press <kbd>Ctrl-f</kbd> (the filter key) to switch to **deep** mode: the query
-now goes to `ripgrep` over the full transcripts in `~/.claude/projects/`, so
-Claude's answers and tool output match too, and each row ends with the matching
-snippet. Press it again to return to prompt search.
+The popup opens in **deep** mode (`deep >`): every keystroke sends the query to
+`ripgrep` over the full transcripts in `~/.claude/projects/`, so your prompts,
+Claude's answers and tool output all match, and each row ends with the matching
+snippet; results keep the newest-first order. Press <kbd>Ctrl-f</kbd> (the
+filter key) for `prompts >` mode, plain fzf filtering over the rows, where the
+appended prompt text makes any prompt wording match; press it again to go back.
 
 <kbd>Enter</kbd> on a running session switches to its pane. On a closed one it
 resumes the session with `claude --resume <id>` **where it last ran**: a new

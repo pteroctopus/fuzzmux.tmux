@@ -2,8 +2,9 @@
 set -euo pipefail
 
 # fuzzmux.tmux - Claude Code session history: search every session ever run
-# (by your prompts, or with ctrl-f also by Claude's answers), then jump to the
-# running instance or resume the session where it last ran.
+# (deep mode, the default: ripgrep over the full transcripts, answers included;
+# ctrl-f switches to fzf filtering over your prompts), then jump to the running
+# instance or resume the session where it last ran.
 #
 # Modes (internal, driven by the popup and fzf):
 #   <no --run>          open the popup, re-invoke with --run
@@ -99,26 +100,28 @@ if [[ "${1:-}" == "--deep" ]]; then
     printf '%s%s\n' "-${DEL}" "ripgrep (rg) is required for searching answers"
     exit 0
   }
-  # Fixed-string query inside a context-capturing regex.
-  esc="$(printf '%s' "$query" | sed 's/[][\\.^$*+?(){}|\/]/\\&/g')"
   visible=""
-  # rg exits 1 on no match and 141 when head closes the pipe early; neither is
-  # a failure here, and fzf shows "Command failed" for any non-zero reload.
+  # rg exits 1 on no match; not a failure here, and fzf shows "Command failed"
+  # for any non-zero reload.
   set +o pipefail
-  { rg --no-messages -i --max-depth 2 -g '*.jsonl' -m 1 -o --no-heading -H \
-    -e ".{0,40}${esc}.{0,40}" "$PROJECTS" 2>/dev/null || true; } | head -n 300 |
-    while IFS= read -r hit; do
-      path="${hit%%:*}"
-      snippet="${hit#*:}"
-      sid="${path##*/}"
-      sid="${sid%.jsonl}"
-      line="$(awk -F "$DEL" -v sid="$sid" '$1 == sid { print; exit }' "$meta")"
-      [[ -n "$line" ]] || continue
-      IFS="$DEL" read -r _ state age dir title <<<"$line"
-      snippet="${snippet//[$'\t\r']/ }"
-      row_visible_into visible "$state" "$age" "$dir" "$title"
-      printf '%s%s%s  %s %s\n' "$sid" "$DEL" "$visible" "$ARROW" "$snippet"
-    done || true
+  # Pass 1: which transcripts contain the query (fixed string, one fast scan).
+  declare -A HIT
+  while IFS= read -r path; do
+    sid="${path##*/}"
+    HIT["${sid%.jsonl}"]="$path"
+  done < <(rg -l --no-messages -i -F --max-depth 2 -g '*.jsonl' -- "$query" "$PROJECTS" 2>/dev/null || true)
+  # Pass 2: walk the metadata (newest session first) and fetch one snippet per
+  # matching session, capped so a broad query stays quick.
+  esc="$(printf '%s' "$query" | sed 's/[][\\.^$*+?(){}|\/]/\\&/g')"
+  shown=0
+  while IFS="$DEL" read -r sid state age dir title; do
+    [[ -n "${HIT[$sid]+set}" ]] || continue
+    snippet="$(rg --no-messages -i -m 1 -o -e ".{0,40}${esc}.{0,40}" "${HIT[$sid]}" 2>/dev/null | head -n 1)" || true
+    snippet="${snippet//[$'\t\r']/ }"
+    row_visible_into visible "$state" "$age" "$dir" "$title"
+    printf '%s%s%s  %s %s\n' "$sid" "$DEL" "$visible" "$ARROW" "$snippet"
+    ((++shown >= 100)) && break
+  done <"$meta"
   exit 0
 fi
 
@@ -285,16 +288,17 @@ export FUZZMUX_CH_ROWS="$ROWS" FUZZMUX_CH_META="$META" FUZZMUX_CH_COLORS="$USE_C
 # --- fzf ----------------------------------------------------------------------------------
 
 SELF="$(printf '%q' "$0")"
-PROMPT_NORMAL="history > "
+PROMPT_NORMAL="prompts > "
 PROMPT_DEEP="deep > "
-# The filter key toggles deep mode: the query goes to ripgrep over the transcripts
+# Deep mode is the default: the query goes to ripgrep over the transcripts
 # (Claude's answers included) instead of fzf's own filtering, reloading on every
-# keystroke.
+# keystroke. The filter key switches to fzf filtering over the prompt rows and
+# back.
 BIND_TOGGLE="${FZF_BIND_KEY}:transform:if [[ \$FZF_PROMPT == '${PROMPT_DEEP}' ]]; then echo 'change-prompt(${PROMPT_NORMAL})+enable-search+reload(cat \"\$FUZZMUX_CH_ROWS\")'; else echo 'change-prompt(${PROMPT_DEEP})+disable-search+reload(${SELF} --deep {q})'; fi"
 BIND_CHANGE="change:transform:[[ \$FZF_PROMPT == '${PROMPT_DEEP}' ]] && echo 'reload(${SELF} --deep {q})' || true"
 PREVIEW_CMD="${SELF} --preview-line {}"
 
-FZF_ARGS=(--ansi --exact --exit-0 --no-hscroll --prompt "$PROMPT_NORMAL"
+FZF_ARGS=(--ansi --exact --exit-0 --no-hscroll --disabled --prompt "$PROMPT_DEEP"
   --delimiter="$DEL" --with-nth=2
   --bind="$BIND_TOGGLE" --bind="$BIND_CHANGE")
 if [[ "$PREVIEW" == "true" ]]; then
