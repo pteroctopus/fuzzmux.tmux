@@ -102,8 +102,11 @@ if [[ "${1:-}" == "--deep" ]]; then
   # Fixed-string query inside a context-capturing regex.
   esc="$(printf '%s' "$query" | sed 's/[][\\.^$*+?(){}|\/]/\\&/g')"
   visible=""
-  rg --no-messages -i --max-depth 2 -g '*.jsonl' -m 1 -o --no-heading -H \
-    -e ".{0,40}${esc}.{0,40}" "$PROJECTS" 2>/dev/null | head -n 300 |
+  # rg exits 1 on no match and 141 when head closes the pipe early; neither is
+  # a failure here, and fzf shows "Command failed" for any non-zero reload.
+  set +o pipefail
+  { rg --no-messages -i --max-depth 2 -g '*.jsonl' -m 1 -o --no-heading -H \
+    -e ".{0,40}${esc}.{0,40}" "$PROJECTS" 2>/dev/null || true; } | head -n 300 |
     while IFS= read -r hit; do
       path="${hit%%:*}"
       snippet="${hit#*:}"
@@ -115,7 +118,7 @@ if [[ "${1:-}" == "--deep" ]]; then
       snippet="${snippet//[$'\t\r']/ }"
       row_visible_into visible "$state" "$age" "$dir" "$title"
       printf '%s%s%s  %s %s\n' "$sid" "$DEL" "$visible" "$ARROW" "$snippet"
-    done
+    done || true
   exit 0
 fi
 
