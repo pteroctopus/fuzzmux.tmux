@@ -330,21 +330,33 @@ not only the running ones:
 ```
 
 Rows come from Claude Code's prompt history (`~/.claude/history.jsonl`), one per
-session, newest first: running state or `closed`, age of the last prompt,
-project directory, first prompt as title, and after the bar every prompt of the
-session. The preview lists the session's prompts, newest first, and where it
-last ran.
+session, newest first. The header line names the columns: `state` (running
+state, or `closed`), `age` of the last prompt, `project` directory, the `first
+prompt` as title, and then either `»` the matching snippet (deep mode) or `│`
+every prompt of the session (prompts mode).
 
 The popup opens in **deep** mode (`deep >`): every keystroke sends the query to
-`ripgrep` over the full transcripts in `~/.claude/projects/`, so your prompts,
-Claude's answers and tool output all match, and each row ends with the matching
-snippet; results keep the newest-first order. Matching follows fzf's habits:
-space-separated terms must all occur in the transcript, in any order; inside a
-term up to three arbitrary characters may separate consecutive query characters,
-so `wrapupcomplete` finds "wrapup complete" and "wrapUpComplete"; a term
-starting with `'` must occur exactly. Press <kbd>Ctrl-f</kbd> (the filter key)
-for `prompts >` mode, plain fzf filtering over the rows, where the appended
-prompt text makes any prompt wording match; press it again to go back.
+`ripgrep` over the conversation text, so your prompts and Claude's answers both
+match, each row ends with the matching snippet, and the preview shows the
+matching lines with two lines of context, highlighted, plus where the session
+last ran. Results keep the newest-first order. The conversation text comes from
+a per-session extract of the transcript (prompts and answers only, no tool
+output or JSON) kept under `~/.cache/fuzzmux/claude-text/` and refreshed
+whenever a transcript changed, so the first popup after many new sessions takes
+a moment longer.
+
+Matching follows fzf's habits: space-separated terms must all occur in the
+conversation, in any order; inside a term up to two punctuation or whitespace
+characters may separate consecutive query characters, so `wrapupcomplete` finds
+"wrapup complete" and "wrapUpComplete" but not unrelated words; a term starting
+with `'` must occur exactly. Press <kbd>Ctrl-f</kbd> (the filter key) for
+`prompts >` mode, plain fzf filtering over the rows, where the appended prompt
+text makes any prompt wording match and the preview lists the session's prompts;
+press it again to go back.
+
+Resuming lands you at the end of the conversation: `claude --resume` has no way
+to scroll to a given message, which is why the preview shows the hit in context
+before you decide.
 
 <kbd>Enter</kbd> on a running session switches to its pane. On a closed one it
 resumes the session with `claude --resume <id>` **where it last ran**: a new
