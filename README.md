@@ -370,7 +370,8 @@ to a new window in the current session.
 
 Options: `@fuzzmux-bind-claude-history` / `-zoom` (default `y` / `Y`),
 `@fuzzmux-claude-history-enabled`, `@fuzzmux-claude-history-preview-enabled`,
-`@fuzzmux-claude-history-preview-window`, and `@fuzzmux-claude-command` (the
+`@fuzzmux-claude-history-preview-window` (default `up:50%` here, since hits in
+context read better across the full width), and `@fuzzmux-claude-command` (the
 `claude` binary or wrapper to run, default `claude`). Requires `jq`; deep mode
 requires `ripgrep`.
 
@@ -505,6 +506,7 @@ set -g @fuzzmux-pane-preview-window 'right:30%'
 set -g @fuzzmux-window-preview-window 'right:30%'
 set -g @fuzzmux-nvim-preview-window 'right:30%'
 set -g @fuzzmux-claude-preview-window 'right:50%' # agent output is wide; give it room
+set -g @fuzzmux-claude-history-preview-window 'up:50%' # default for this one: hits in context
 ```
 
 ### Color Customization

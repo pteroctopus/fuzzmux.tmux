@@ -115,7 +115,11 @@ bind_feature() {
   [[ "$(get_tmux_option '@fuzzmux-colors-enabled' '1')" == "1" ]] && args+=" --colors"
   local palette="$(get_tmux_option '@fuzzmux-color-palette' '')"
   [[ -n "$palette" ]] && args+=" --color-palette=$palette"
-  local preview_window="$(get_tmux_option @fuzzmux-${feature}-preview-window right:30%)"
+  # Per-feature preview placement; the session history shows conversation hits
+  # in context, which read better across the full width.
+  local default_preview="right:30%"
+  [[ "$feature" == "claude-history" ]] && default_preview="up:50%"
+  local preview_window="$(get_tmux_option @fuzzmux-${feature}-preview-window "$default_preview")"
   [[ -n $preview_window ]] && args+=" --preview-window=$preview_window"
 
   
