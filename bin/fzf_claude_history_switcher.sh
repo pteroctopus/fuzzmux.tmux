@@ -31,6 +31,8 @@ PROJECTS="$CFG/projects"
 # it changed. The text rows and the preview come from these.
 TEXT_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/fuzzmux/claude-text"
 ELLIPSIS="$(printf '\342\200\246')" # U+2026
+# The bar separates the fields of an fzf row (sid, line number, prefix, text) and
+# doubles as the visible column separator, so fzf can limit matching to the text.
 BAR="$(printf '\342\224\202')"      # U+2502
 PROMPT_TEXT="text > "
 PROMPT_SESSIONS="sessions > "
@@ -93,9 +95,9 @@ row_visible_into() {
 
 if [[ "${1:-}" == "--preview-line" ]]; then
   line="${2:-}"
-  sid="${line%%"$DEL"*}"
-  rest="${line#*"$DEL"}"
-  lineno="${rest%%"$DEL"*}"
+  sid="${line%%"$BAR"*}"
+  rest="${line#*"$BAR"}"
+  lineno="${rest%%"$BAR"*}"
   [[ -n "$sid" && "$sid" != "-" ]] || exit 0
   meta="${FUZZMUX_CH_META:-}"
   if [[ -n "$meta" && -f "$meta" ]]; then
@@ -264,14 +266,15 @@ while IFS="$DEL" read -r sid last_ts project _count title prompts; do
   # meta: sid US state US age US dir(display) US title US project(full path)
   printf '%s%s%s%s%s%s%s%s%s%s%s\n' "$sid" "$DEL" "$state" "$DEL" "$age" "$DEL" "$dir" "$DEL" "$title" "$DEL" "$project" >>"$META"
   row_visible_into visible "$state" "$age" "$dir" "$title"
-  printf '%s%s-%s%s  %s %s\n' "$sid" "$DEL" "$DEL" "$visible" "$BAR" "$prompts" >>"$ROWS"
-  # Every line of the conversation as a row of its own: sid US lineno US prefix line
+  # fzf rows, bar-separated: sid | lineno (- for a session row) | prefix | text
+  printf '%s%s-%s%s%s %s\n' "$sid" "$BAR" "$BAR" "$visible" "$BAR" "$prompts" >>"$ROWS"
+  # Every line of the conversation as a row of its own.
   state_ansi_into color "$state"
   pad_into c_state "$state" 10
   pad_into c_age "$age" 4
   pad_into c_dir "$dir" 38
-  awk -v sid="$sid" -v pre="${color}${c_state}${color:+$RESET}  ${c_age}  ${c_dir}  ${BAR} " -v del="$DEL" \
-    'NF { printf "%s%s%d%s%s%s\n", sid, del, NR, del, pre, $0 }' "$TEXT_CACHE/$sid.txt" >>"$TEXT_ROWS" 2>/dev/null || true
+  awk -v sid="$sid" -v pre="${color}${c_state}${color:+$RESET}  ${c_age}  ${c_dir}" -v bar="$BAR" \
+    'NF { printf "%s%s%d%s%s%s %s\n", sid, bar, NR, bar, pre, bar, $0 }' "$TEXT_CACHE/$sid.txt" >>"$TEXT_ROWS" 2>/dev/null || true
 done < <(jq -rs '
   map(select(.sessionId != null and .display != null))
   | group_by(.sessionId)
@@ -298,8 +301,11 @@ export FUZZMUX_CH_ROWS="$ROWS" FUZZMUX_CH_TEXT="$TEXT_ROWS" FUZZMUX_CH_META="$ME
 
 SELF="$(printf '%q' "$0")"
 # Default list: every conversation line, newest session first, matched by fzf
-# itself. The filter key swaps in the one-row-per-session overview and back.
-BIND_TOGGLE="${FZF_BIND_KEY}:transform:if [[ \$FZF_PROMPT == '${PROMPT_TEXT}' ]]; then echo 'change-prompt(${PROMPT_SESSIONS})+reload(cat \"\$FUZZMUX_CH_ROWS\")+refresh-preview'; else echo 'change-prompt(${PROMPT_TEXT})+reload(cat \"\$FUZZMUX_CH_TEXT\")+refresh-preview'; fi"
+# itself and only on the text after the bar (--nth=2.. of the displayed part),
+# so state, age and project never skew a text search. The filter key swaps in
+# the one-row-per-session overview, where everything is searchable, with a
+# cleared query; and back.
+BIND_TOGGLE="${FZF_BIND_KEY}:transform:if [[ \$FZF_PROMPT == '${PROMPT_TEXT}' ]]; then echo 'change-prompt(${PROMPT_SESSIONS})+reload(cat \"\$FUZZMUX_CH_ROWS\")+change-nth(1..)+clear-query+first+refresh-preview'; else echo 'change-prompt(${PROMPT_TEXT})+reload(cat \"\$FUZZMUX_CH_TEXT\")+change-nth(2..)+clear-query+first+refresh-preview'; fi"
 PREVIEW_CMD="${SELF} --preview-line {}"
 h_state="" h_age="" h_dir=""
 pad_into h_state "state" 10
@@ -308,14 +314,14 @@ pad_into h_dir "project" 38
 HEADER="${h_state}  ${h_age}  ${h_dir}  ${BAR} conversation line (${FZF_BIND_KEY}: sessions overview)"
 
 FZF_ARGS=(--ansi --exit-0 --no-hscroll --tiebreak=index --prompt "$PROMPT_TEXT"
-  --delimiter="$DEL" --with-nth=3 --header="$HEADER"
+  --delimiter="$BAR" --with-nth=3.. --nth=2.. --header="$HEADER"
   --bind="$BIND_TOGGLE")
 if [[ "$PREVIEW" == "true" ]]; then
   FZF_ARGS+=(--preview "$PREVIEW_CMD" --preview-window="$PREVIEW_WINDOW")
 fi
 
 SELECTION=$(fzf "${FZF_ARGS[@]}" <"$TEXT_ROWS") || exit 0
-sid="${SELECTION%%"$DEL"*}"
+sid="${SELECTION%%"$BAR"*}"
 [[ -n "$sid" && "$sid" != "-" ]] || exit 0
 
 # --- act: switch to the running instance, or resume where it last ran -----------------

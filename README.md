@@ -335,14 +335,17 @@ conversation, newest session first, matched by fzf itself with its usual rules
 `state` (running state, or `closed`), `age` of the session's last prompt,
 `project` directory, then after `│` the conversation line, from your prompts as
 well as Claude's answers; the `[user 2026-09-11 14:12]` header lines of the
-messages are rows too, so a date matches. The preview shows the conversation
-around the selected line, the line itself highlighted, under the session's
-location. Enter acts on the row's session.
+messages are rows too, so a date matches. Only the part after the bar is
+matched, so a project name or a state word never skews a text search. The
+preview shows the conversation around the selected line, the line itself
+highlighted, under the session's location. Enter acts on the row's session.
 
 Press <kbd>Ctrl-f</kbd> (the filter key) for the `sessions >` overview: one row
 per session with the first real prompt as title and every prompt appended after
-`│`, the preview listing the session's prompts newest first; press it again to
-go back to the text rows.
+`│`, where state, project, title and prompts are all searchable, and the
+preview lists the session's prompts newest first. The query is cleared on each
+switch so both modes start clean; press the key again to go back to the text
+rows.
 
 The conversation text comes from a per-session extract of the transcript
 (prompts and answers only, no tool output or JSON) kept under
