@@ -329,30 +329,27 @@ not only the running ones:
   closed    2d   ~/Development/infra   Rotate the staging certs       │ rotate the staging certs
 ```
 
-Rows come from Claude Code's prompt history (`~/.claude/history.jsonl`), one per
-session, newest first. The header line names the columns: `state` (running
-state, or `closed`), `age` of the last prompt, `project` directory, the `first
-prompt` as title, and then either `»` the matching snippet (deep mode) or `│`
-every prompt of the session (prompts mode).
+The popup opens in **text** mode (`text >`): one row per line of every
+conversation, newest session first, matched by fzf itself with its usual rules
+(`'exact`, fuzzy, `^prefix`, `!not`, `a | b`). The header names the columns:
+`state` (running state, or `closed`), `age` of the session's last prompt,
+`project` directory, then after `│` the conversation line, from your prompts as
+well as Claude's answers; the `[user 2026-09-11 14:12]` header lines of the
+messages are rows too, so a date matches. The preview shows the conversation
+around the selected line, the line itself highlighted, under the session's
+location. Enter acts on the row's session.
 
-The popup opens in **deep** mode (`deep >`): every keystroke sends the query to
-`ripgrep` over the conversation text, so your prompts and Claude's answers both
-match, each row ends with the matching snippet, and the preview shows the
-matching lines with two lines of context, highlighted, plus where the session
-last ran. Results keep the newest-first order. The conversation text comes from
-a per-session extract of the transcript (prompts and answers only, no tool
-output or JSON) kept under `~/.cache/fuzzmux/claude-text/` and refreshed
-whenever a transcript changed, so the first popup after many new sessions takes
-a moment longer.
+Press <kbd>Ctrl-f</kbd> (the filter key) for the `sessions >` overview: one row
+per session with the first real prompt as title and every prompt appended after
+`│`, the preview listing the session's prompts newest first; press it again to
+go back to the text rows.
 
-Matching follows fzf's habits: space-separated terms must all occur in the
-conversation, in any order; inside a term up to two punctuation or whitespace
-characters may separate consecutive query characters, so `wrapupcomplete` finds
-"wrapup complete" and "wrapUpComplete" but not unrelated words; a term starting
-with `'` must occur exactly. Press <kbd>Ctrl-f</kbd> (the filter key) for
-`prompts >` mode, plain fzf filtering over the rows, where the appended prompt
-text makes any prompt wording match and the preview lists the session's prompts;
-press it again to go back.
+The conversation text comes from a per-session extract of the transcript
+(prompts and answers only, no tool output or JSON) kept under
+`~/.cache/fuzzmux/claude-text/` and refreshed whenever a transcript changed, so
+the first popup after many new sessions takes a moment longer. Rows come from
+Claude Code's prompt history (`~/.claude/history.jsonl`) for the overview and
+from that extract for the text mode.
 
 Resuming lands you at the end of the conversation: `claude --resume` has no way
 to scroll to a given message, which is why the preview shows the hit in context
@@ -372,8 +369,7 @@ Options: `@fuzzmux-bind-claude-history` / `-zoom` (default `y` / `Y`),
 `@fuzzmux-claude-history-enabled`, `@fuzzmux-claude-history-preview-enabled`,
 `@fuzzmux-claude-history-preview-window` (default `up:50%` here, since hits in
 context read better across the full width), and `@fuzzmux-claude-command` (the
-`claude` binary or wrapper to run, default `claude`). Requires `jq`; deep mode
-requires `ripgrep`.
+`claude` binary or wrapper to run, default `claude`). Requires `jq`.
 
 ### Status-line summary
 
