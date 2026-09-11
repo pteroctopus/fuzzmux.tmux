@@ -14,7 +14,7 @@ Works with [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim) to track 
 - **Broadcast Neovim commands** - Send commands to all active Neovim instances across tmux panes **(requires [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim))**
 - **Pane jumplist** - Browser/Vim-style back/forward navigation through your focused-pane history (global across all sessions)
 - **Fuzzy find Claude Code agents** - Switch between [Claude Code](https://code.claude.com) instances running in any pane of any session, most urgent first (permission prompt, question, finished turn, working)
-- **Claude Code notifications** - Optional Claude Code hooks show a tmux status-line message the moment an agent needs your input, plus a status-line summary snippet
+- **Claude Code notifications** - Optional Claude Code hooks show a tmux status-line message the moment an agent needs your input, optionally a desktop notification that jumps to the pane when clicked, plus a status-line summary snippet
 - **Progressive filtering** - Use a single key (default `ctrl-f`) to progressively filter results by session, window, or pane
 - **Active/attached markers** - Visual `*` indicator in the first column showing attached sessions, active windows, and active panes
 - **Colorized output** - Color-coded session/window identifiers for better visibility
@@ -33,6 +33,8 @@ https://github.com/user-attachments/assets/593dd544-7c35-41aa-b9ff-09fdce9b9b81
 - **bat** (optional) - For enhanced file previews in Neovim buffer switcher
 - **column** (required) - For better formatting of lists
 - **jq** (optional) - For Claude Code agent detection and the hook installer
+- **terminal-notifier** (optional, macOS) - For Claude Code desktop notifications that jump to the pane when clicked (`brew install terminal-notifier`)
+- **notify-send** (optional, Linux) - For Claude Code desktop notifications, without a click action (`libnotify-bin` on Debian/Ubuntu, `libnotify` on Arch and Fedora)
 - **fuzzmux.nvim** (optional but HIGHLY recommended) - Required for Neovim buffer tracking functionality
 - **Claude Code** (optional) - A 2.1.x release that writes `~/.claude/sessions/<pid>.json` state files (the same data `claude agents --json` shows); required only for the Claude Code agent switcher
 
@@ -243,11 +245,19 @@ client shows a message in its status line for a few seconds, for example:
 Claude needs permission for Bash: @api #1.%2 (Fix flaky integration test)
 ```
 
-The message is skipped when you are already looking at that pane. Options:
+The message is skipped when you are already looking at that pane, meaning it is
+the active pane of the window in front of you *and* your terminal window has the
+OS focus. tmux learns the latter from the terminal's focus events, so after
+<kbd>Alt-Tab</kbd> to another application the same pane counts as unwatched and
+the notification is sent; coming back marks the agent as seen. Terminals that do
+not report focus (macOS Terminal.app, for one) never look focused to tmux; set
+`@fuzzmux-claude-focus-check 'pane'` there to fall back to "active pane of an
+attached client". Options:
 
 ```tmux
 set -g @fuzzmux-claude-notify '0'            # no messages (state tracking stays on)
 set -g @fuzzmux-claude-notify-focused '1'    # also notify for the pane you are viewing
+set -g @fuzzmux-claude-focus-check 'pane'    # ignore terminal focus (see above)
 set -g @fuzzmux-claude-notify-duration '8000' # milliseconds (default 5000)
 set -g @fuzzmux-claude-notify-bell '1'       # also ring the pane's bell (see below)
 ```
@@ -257,6 +267,27 @@ The bell goes through tmux's normal alert path, so it follows tmux's scope: with
 session, and the terminal bell reaches clients attached to *that* session
 (`bell-action`). An agent finishing in another session rings nothing where you
 are; the status-line count below covers that case.
+
+**Desktop notifications** reach you when the terminal is not in front:
+
+```tmux
+set -g @fuzzmux-claude-notify-desktop '1'
+# set -g @fuzzmux-claude-notify-desktop-app 'com.mitchellh.ghostty'  # app to bring forward on click
+```
+
+On macOS with [terminal-notifier](https://github.com/julienXX/terminal-notifier)
+installed, each notification carries the agent's location and title, replaces the
+previous one for the same agent, and a click brings your terminal to the front
+and switches tmux to that pane (`bin/claude_goto.sh`), which also marks the agent
+as seen. The terminal to activate is detected from the tmux server's environment
+(`__CFBundleIdentifier`); set `@fuzzmux-claude-notify-desktop-app` to override
+it. macOS asks once to allow notifications from terminal-notifier. Without
+terminal-notifier the hook falls back to `osascript`, which shows the
+notification but cannot react to clicks (macOS attributes it to Script Editor,
+so a click opens that instead). On Linux `notify-send` is used, also without a
+click action. All three channels (message, bell, desktop) are
+independent switches that share the same triggers and the same focused-pane
+suppression.
 
 Installer options: `--settings <file>` (for example `.claude/settings.json` for
 project scope), `--dry-run` (show the diff), `--print` (print the JSON fragment
@@ -668,6 +699,13 @@ Installing the hooks (see [Claude Code Agents](#claude-code-agents)) makes detec
 - The message is suppressed while you are looking at the agent's pane; set `@fuzzmux-claude-notify-focused '1'` to see it anyway
 - Sessions started before installing the hooks are tracked from their next event; `claude --bare` skips hooks entirely
 - `@fuzzmux-claude-notify-bell` only reaches the agent's own session (tmux alert scope); use the status-line summary for other sessions
+
+### Desktop notifications do not appear or do not jump
+
+- Check the tool in the foreground: `terminal-notifier -message test` (macOS) or `notify-send test` (Linux) must show something; the hook runs it in the background, so errors are only visible this way
+- macOS: if it prints "Notifications are turned off for this application", the permission prompt was missed or denied (it does not appear when the first launch comes from a background process such as the hook). Allow terminal-notifier in System Settings > Notifications (`open "x-apple.systempreferences:com.apple.Notifications-Settings.extension"` takes you there); the `tccutil reset UserNotification ...` command it suggests fails on recent macOS releases
+- Clicking jumps only with terminal-notifier; the `osascript` fallback and `notify-send` show the notification but ignore clicks
+- The click activates the app named by `@fuzzmux-claude-notify-desktop-app`, defaulting to the terminal tmux was started from; set it if tmux runs under a different terminal
 
 ### Mode column shows only dashes
 
