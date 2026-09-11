@@ -163,6 +163,7 @@ States, in the order they are listed:
 | `question`   | Claude asked you a question                                    |
 | `waiting`    | Claude finished a turn that you have not looked at yet         |
 | `working`    | Claude is busy                                                 |
+| `background` | The turn is over but a background shell, monitor or agent is still running (kind in parentheses); Claude wakes up by itself when it finishes, nothing is expected from you |
 | `idle`       | At the prompt with nothing unread: fresh or resumed session, or a finished turn you already looked at |
 
 `waiting` clears itself the moment you focus the agent's pane, by whatever
@@ -191,6 +192,7 @@ styles, using your terminal's named colors by default. Override them with tmux
 set -g @fuzzmux-claude-attention-style 'fg=red,bold'   # permission, question
 set -g @fuzzmux-claude-waiting-style 'fg=yellow'       # finished turn
 set -g @fuzzmux-claude-working-style 'fg=brightgreen'  # busy
+set -g @fuzzmux-claude-background-style 'fg=cyan'      # background work running
 set -g @fuzzmux-claude-idle-style 'dim'                # fresh session
 
 # Rose Pine example
@@ -207,10 +209,14 @@ other switchers, and `@fuzzmux-colors-enabled '0'` turns everything plain.
 No setup is needed for the switcher. Claude Code writes a state file for every
 running instance (`~/.claude/sessions/<pid>.json`, honouring
 `$CLAUDE_CONFIG_DIR`) that records the tmux pane it runs in and whether it is
-busy or idle; fuzzmux reads those files with `jq` and drops entries whose
-process or pane is gone. Without the hooks below, agents are only `working` or
-`idle`: Claude Code alone cannot tell a pending permission prompt from ordinary
-work, nor an unread finished turn from one you already looked at.
+busy, idle, waiting for you, or still running background work; fuzzmux reads
+those files with `jq` and drops entries whose process or pane is gone. Without
+the hooks below, agents show as `working`, `idle`, `permission` (Claude's
+"waiting" status, which does not say whether a tool or a question is pending)
+or `background`: Claude Code alone cannot name the tool that waits for
+approval, nor tell an unread finished turn from one you already looked at.
+`background` comes only from the state file, since no hook fires for
+background shells, monitors or agents.
 
 The optional hooks refine this: they record the exact state as pane user options
 (`@fuzzmux-claude-state`, `@fuzzmux-claude-since`, `@fuzzmux-claude-detail`,
@@ -258,6 +264,8 @@ attached client". Options:
 set -g @fuzzmux-claude-notify '0'            # no messages (state tracking stays on)
 set -g @fuzzmux-claude-notify-focused '1'    # also notify for the pane you are viewing
 set -g @fuzzmux-claude-focus-check 'pane'    # ignore terminal focus (see above)
+set -g @fuzzmux-claude-notify-delay '2'      # seconds between a finished turn and its
+                                             # notification (see below)
 set -g @fuzzmux-claude-notify-duration '8000' # milliseconds (default 5000)
 set -g @fuzzmux-claude-notify-bell '1'       # also ring the pane's bell (see below)
 ```
@@ -289,6 +297,16 @@ click action. All three channels (message, bell, desktop) are
 independent switches that share the same triggers and the same focused-pane
 suppression.
 
+A finished turn is not always the end: when Claude ends its turn with a
+background shell, monitor or agent still running, it continues by itself once
+that finishes. The `Stop` hook cannot see this, so the hook waits
+`@fuzzmux-claude-notify-delay` seconds (default 2) and re-reads Claude's state
+file: if it reports background work, the agent becomes `background` and no
+notification is sent; otherwise the notification goes out as usual. The
+"finished" notification therefore arrives about two seconds late, and the real
+finish after the background work is notified normally. The same check guards
+the idle reminder.
+
 Installer options: `--settings <file>` (for example `.claude/settings.json` for
 project scope), `--dry-run` (show the diff), `--print` (print the JSON fragment
 for manual editing), `--uninstall`.
@@ -306,9 +324,9 @@ and are not listed.
 set -g status-right '#(~/.tmux/plugins/fuzzmux.tmux/bin/claude_status.sh) %H:%M'
 ```
 
-Output like `!2 *1 ~3` means two agents need you (permission or question), one
-is waiting for input and three are working; nothing is printed when no agent
-runs. It refreshes with `status-interval`, so a short interval such as `5` keeps
+Output like `!2 *1 ~3 &1` means two agents need you (permission or question),
+one finished a turn you have not looked at, three are working and one has
+background work running; nothing is printed when no agent runs. It refreshes with `status-interval`, so a short interval such as `5` keeps
 it current. Each group is wrapped in the matching `@fuzzmux-claude-*-style` (see
 Colors above). Options: `--no-colors`, `--idle` (also count idle agents as
 `.N`), `--prefix=<text>`.
@@ -762,10 +780,10 @@ When switching buffers, fuzzmux.tmux uses Neovim's RPC socket to send buffer swi
 
 Two sources are merged by `bin/claude_lib.sh`:
 
-1. **Claude Code state files** - `~/.claude/sessions/<pid>.json`, written by Claude Code itself for every running instance. fuzzmux reads `tmux` (`session:@window.%pane`), `status` (`busy`/`idle`), `statusUpdatedAt`, `name` and `cwd`, and skips files whose process is dead or whose pane is gone.
+1. **Claude Code state files** - `~/.claude/sessions/<pid>.json`, written by Claude Code itself for every running instance. fuzzmux reads `tmux` (`session:@window.%pane`), `status`, `statusUpdatedAt`, `name` and `cwd`, and skips files whose process is dead or whose pane is gone. Status values map as `busy`/`compacting` to `working`, `idle`/`starting` to `idle`, `waiting` to `permission`, and any other value (`shell`, `monitor`, `agent`, ...) to `background` with the value as detail.
 2. **Pane user options** - written by `bin/claude_hook.sh` from Claude Code hooks. `$TMUX_PANE` is inherited by the hook from the Claude process, so the state lands on the right pane without any lookup, and disappears with the pane:
    ```
-   @fuzzmux-claude-state   permission | question | waiting | working | idle
+   @fuzzmux-claude-state   permission | question | waiting | working | background | idle
    @fuzzmux-claude-since   epoch seconds when the state was entered
    @fuzzmux-claude-detail  e.g. the tool awaiting permission
    @fuzzmux-claude-mode    permission mode from the last hook payload

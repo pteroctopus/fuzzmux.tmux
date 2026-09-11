@@ -8,19 +8,25 @@
 #  1. Claude Code's own per-process state files (no setup required):
 #       ${CLAUDE_CONFIG_DIR:-~/.claude}/sessions/<pid>.json
 #     Every interactive session records the pane it runs in
-#     ("tmux": "session:@window.%pane") and a coarse status ("busy" | "idle").
+#     ("tmux": "session:@window.%pane") and a status: "busy", "idle", "waiting"
+#     (blocked on a permission prompt or question), or the kind of background
+#     work still running after the turn ended ("shell", "monitor", "agent").
 #     This is the same data `claude agents --json` prints.
 #
 #  2. Pane user options written by bin/claude_hook.sh (optional; registered in
 #     Claude Code's hook settings by bin/claude_hooks_install.sh):
-#       @fuzzmux-claude-state   permission | question | waiting | working | idle
+#       @fuzzmux-claude-state   permission | question | waiting | working |
+#                               background | idle
 #       @fuzzmux-claude-since   epoch seconds when that state was entered
 #       @fuzzmux-claude-detail  free text, e.g. the tool awaiting permission
 #       @fuzzmux-claude-mode    Claude's permission mode (hook payloads only)
-#     Hooks are event-driven and know things the state file does not: a pending
-#     permission prompt or question is still "busy" from Claude's point of view,
-#     and only hooks can tell an unread finished turn ("waiting") from an agent
-#     whose output you already looked at ("idle", see bin/claude_focus.sh).
+#     Hooks are event-driven and know things the state file does not: which
+#     tool waits for permission, whether a question is pending, and only hooks
+#     can tell an unread finished turn ("waiting") from an agent whose output
+#     you already looked at ("idle", see bin/claude_focus.sh). The state file in
+#     turn is the only source that knows about background work ("background":
+#     the turn is over but a shell, monitor or agent still runs and will wake
+#     the agent up by itself).
 #
 # claude_agents_list prints one row per live agent, most urgent first, with
 # fields separated by CLAUDE_DEL (ASCII unit separator - unlike a tab it is not
@@ -51,25 +57,35 @@ claude_state_rank() {
   question) echo 1 ;;
   waiting) echo 2 ;;
   working) echo 3 ;;
-  idle) echo 4 ;;
-  *) echo 5 ;;
+  background) echo 4 ;;
+  idle) echo 5 ;;
+  *) echo 6 ;;
   esac
 }
 
-# Coarse class shared by both sources, used to reconcile them.
+# Coarse class of one of OUR states (apply claude_file_state first for file
+# statuses), used to reconcile the two sources.
 claude_state_class() {
   case "$1" in
-  working | permission | question | busy) echo busy ;;
-  *) echo idle ;;
+  working) echo busy ;;
+  permission | question) echo blocked ;;
+  background) echo background ;;
+  waiting | idle) echo idle ;;
+  *) echo other ;;
   esac
 }
 
 # Map the status found in Claude's state file onto our state vocabulary. The
-# file cannot tell unread output from read output, so not busy is plain idle.
+# file cannot tell unread output from read output, so not busy is plain idle;
+# "waiting" there means blocked on the user, i.e. a permission prompt in most
+# cases; anything else names background work that is still running.
 claude_file_state() {
   case "$1" in
-  busy) echo working ;;
-  *) echo "$1" ;;
+  busy | compacting) echo working ;;
+  idle | starting | "") echo idle ;;
+  waiting) echo permission ;;
+  error) echo error ;;
+  *) echo background ;;
   esac
 }
 
@@ -82,6 +98,7 @@ claude_state_style() {
   permission | question | attention) claude_option @fuzzmux-claude-attention-style 'fg=red,bold' ;;
   waiting) claude_option @fuzzmux-claude-waiting-style 'fg=yellow' ;;
   working) claude_option @fuzzmux-claude-working-style 'fg=brightgreen' ;;
+  background) claude_option @fuzzmux-claude-background-style 'fg=cyan' ;;
   idle) claude_option @fuzzmux-claude-idle-style 'dim' ;;
   *) printf '' ;;
   esac
@@ -256,12 +273,13 @@ claude_agents_list() {
     done
   fi
 
-  # --- Merge. The hook state is richer, so it wins whenever both sources agree
-  # on the coarse class; otherwise the more recent source wins (covers a hook
-  # left at "working" after the user interrupted Claude with Esc, where no Stop
-  # fires, and a permission prompt that the state file still calls "busy").
+  # --- Merge. Background work is only visible in the state file, so that wins
+  # outright. Otherwise the hook state is richer and wins whenever both sources
+  # agree on the coarse class; when they disagree the more recent source wins
+  # (covers a hook left at "working" after the user interrupted Claude with
+  # Esc, where no Stop fires, and a permission prompt the file still calls busy).
   local -A SEEN
-  local state since detail origin fclass hclass cwd out=""
+  local state since detail origin fstate fclass hclass cwd out=""
   for pane in "${!F_STATUS[@]}" "${!P_STATE[@]}"; do
     [[ -n "${SEEN[$pane]:-}" ]] && continue
     SEEN[$pane]=1
@@ -277,18 +295,25 @@ claude_agents_list() {
       continue
     fi
 
-    if [[ -n "$hstate" && -n "$fstatus" ]]; then
-      fclass="$(claude_state_class "$fstatus")"
+    fstate=""
+    fclass=""
+    if [[ -n "$fstatus" ]]; then
+      fstate="$(claude_file_state "$fstatus")"
+      fclass="$(claude_state_class "$fstate")"
+    fi
+    if [[ -n "$fstatus" && "$fclass" == "background" ]]; then
+      state=background; since="${F_SINCE[$pane]}"; detail="$fstatus"; origin="file"
+    elif [[ -n "$hstate" && -n "$fstatus" ]]; then
       hclass="$(claude_state_class "$hstate")"
       if [[ "$fclass" == "$hclass" || "$hsince" -ge "${F_SINCE[$pane]}" ]]; then
         state=$hstate; since=$hsince; detail="${P_DETAIL[$pane]:-}"; origin="hook"
       else
-        state="$(claude_file_state "$fstatus")"; since="${F_SINCE[$pane]}"; detail=""; origin="file"
+        state=$fstate; since="${F_SINCE[$pane]}"; detail=""; origin="file"
       fi
     elif [[ -n "$hstate" ]]; then
       state=$hstate; since=$hsince; detail="${P_DETAIL[$pane]:-}"; origin="hook"
     else
-      state="$(claude_file_state "$fstatus")"; since="${F_SINCE[$pane]}"; detail=""; origin="file"
+      state=$fstate; since="${F_SINCE[$pane]}"; detail=""; origin="file"
     fi
 
     cwd="${F_CWD[$pane]:-${P_PATH[$pane]}}"

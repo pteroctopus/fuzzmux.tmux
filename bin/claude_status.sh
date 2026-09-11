@@ -7,7 +7,8 @@ set -euo pipefail
 #   set -g status-right '#(~/.tmux/plugins/fuzzmux.tmux/bin/claude_status.sh) %H:%M'
 #
 # Output, empty when no agent is running:
-#   !2 *1 ~3    ->  2 need you (permission/question), 1 waiting, 3 working
+#   !2 *1 ~3 &1 ->  2 need you (permission/question), 1 waiting (unread
+#                   finished turn), 3 working, 1 with background work running
 #
 # Options:
 #   --no-colors        plain text (default wraps each group in a tmux style; also
@@ -19,6 +20,7 @@ set -euo pipefail
 #   @fuzzmux-claude-attention-style  default fg=red,bold
 #   @fuzzmux-claude-waiting-style    default fg=yellow
 #   @fuzzmux-claude-working-style    default fg=brightgreen
+#   @fuzzmux-claude-background-style default fg=cyan
 #   @fuzzmux-claude-idle-style       default dim
 
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -38,12 +40,13 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-attention=0 waiting=0 working=0 idle=0
+attention=0 waiting=0 working=0 background=0 idle=0
 while IFS="$CLAUDE_DEL" read -r _pane state _rest; do
   case "$state" in
   permission | question) ((attention++)) || true ;;
   waiting) ((waiting++)) || true ;;
   working) ((working++)) || true ;;
+  background) ((background++)) || true ;;
   idle) ((idle++)) || true ;;
   esac
 done < <(claude_agents_list)
@@ -61,6 +64,7 @@ out=""
 ((attention > 0)) && out+="$(part "$(claude_state_style attention)" "!${attention}") "
 ((waiting > 0)) && out+="$(part "$(claude_state_style waiting)" "*${waiting}") "
 ((working > 0)) && out+="$(part "$(claude_state_style working)" "~${working}") "
+((background > 0)) && out+="$(part "$(claude_state_style background)" "&${background}") "
 [[ "$SHOW_IDLE" == "true" ]] && ((idle > 0)) && out+="$(part "$(claude_state_style idle)" ".${idle}") "
 
 [[ -n "$out" ]] || exit 0

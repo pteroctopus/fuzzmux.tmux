@@ -34,6 +34,12 @@
 #                                       pane" means: the active pane of a client whose
 #                                       terminal window has OS focus (tmux focus events),
 #                                       or merely the active pane of an attached client
+#   @fuzzmux-claude-notify-delay        seconds to wait after a finished turn before
+#                                       notifying (default 2): Claude's state file is
+#                                       re-read then, and if it reports background work
+#                                       (a shell, monitor or agent still running, which
+#                                       will wake the agent by itself) the pane becomes
+#                                       "background" and nothing is sent
 #
 # Kept bash 3.2 compatible and fast: it must never slow down or break Claude
 # Code, so every path exits 0.
@@ -66,6 +72,29 @@ opt() {
   local value
   value="$(tmux show-option -gqv "$1" 2>/dev/null)"
   printf '%s' "${value:-$2}"
+}
+
+# Kind of background work Claude's own state file reports for this session
+# ("shell", "monitor", "agent", ...), empty when none. The file is found by the
+# payload's session_id, falling back to the pane id it records.
+claude_background_status() {
+  local dir file status sid
+  dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/sessions"
+  [ -d "$dir" ] || return 0
+  sid="$(json_field session_id)"
+  file=""
+  [ -n "$sid" ] && file="$(grep -l -- "\"sessionId\":\"$sid\"" "$dir"/*.json 2>/dev/null | head -n 1)"
+  [ -n "$file" ] || file="$(grep -l -- "\.$pane\"" "$dir"/*.json 2>/dev/null | head -n 1)"
+  [ -n "$file" ] || return 0
+  if command -v jq >/dev/null 2>&1; then
+    status="$(jq -r '.status // ""' "$file" 2>/dev/null)"
+  else
+    status="$(sed -n 's/.*"status":"\([^"]*\)".*/\1/p' "$file" 2>/dev/null | head -n 1)"
+  fi
+  case "$status" in
+  busy | idle | waiting | compacting | starting | error | "") ;;
+  *) printf '%s' "$status" ;;
+  esac
 }
 
 current="$(tmux show-option -pqv -t "$pane" @fuzzmux-claude-state 2>/dev/null)"
@@ -205,6 +234,13 @@ title="${title#"${glyph}" }"
 title="${title#"${glyph}"}"
 where="@${session} #${window}.%${index}"
 
+refresh_clients() {
+  local client
+  for client in $(tmux list-clients -F '#{client_name}' 2>/dev/null); do
+    tmux refresh-client -S -t "$client" 2>/dev/null
+  done
+}
+
 # Channel 1: tmux status-line message on every client. The status line is
 # refreshed either way so the summary counts follow the state change.
 show_message=0
@@ -212,19 +248,30 @@ show_message=0
 message="Claude ${verb}: ${where}${title:+ (${title})}"
 message="${message//#/##}" # literal '#' in a tmux format
 duration="$(opt @fuzzmux-claude-notify-duration 5000)"
-for client in $(tmux list-clients -F '#{client_name}' 2>/dev/null); do
-  [ "$show_message" = 1 ] && tmux display-message -c "$client" -d "$duration" "$message" 2>/dev/null
-  tmux refresh-client -S -t "$client" 2>/dev/null
-done
+refresh_clients
 
-# Channel 2: bell in the pane, so tmux's monitor-bell flags the window (tmux
-# alert scope: only visible within the agent's own session).
-if [ "$(opt @fuzzmux-claude-notify-bell 0)" = 1 ] && [ -n "$tty" ] && [ -w "$tty" ]; then
-  printf '\a' >"$tty" 2>/dev/null
-fi
+send_notifications() {
+  local client
+  if [ "$show_message" = 1 ]; then
+    for client in $(tmux list-clients -F '#{client_name}' 2>/dev/null); do
+      tmux display-message -c "$client" -d "$duration" "$message" 2>/dev/null
+    done
+  fi
 
-# Channel 3: desktop notification, for when you are in another application.
-# Sent in the background so a slow notifier never delays Claude Code.
+  # Channel 2: bell in the pane, so tmux's monitor-bell flags the window (tmux
+  # alert scope: only visible within the agent's own session).
+  if [ "$(opt @fuzzmux-claude-notify-bell 0)" = 1 ] && [ -n "$tty" ] && [ -w "$tty" ]; then
+    printf '\a' >"$tty" 2>/dev/null
+  fi
+
+  # Channel 3: desktop notification, for when you are in another application.
+  if [ "$(opt @fuzzmux-claude-notify-desktop 0)" = 1 ]; then
+    desktop_notify "$where" "${verb}${title:+: ${title}}" "fuzzmux-claude-${pane}"
+  fi
+}
+
+# Desktop notifier for channel 3 (see send_notifications). Sent in the
+# background so a slow notifier never delays Claude Code.
 desktop_notify() {
   local subtitle="$1" body="$2" group="$3" app goto sock tmux_bin
   case "$(uname -s 2>/dev/null)" in
@@ -255,8 +302,29 @@ desktop_notify() {
   esac
 }
 
-if [ "$(opt @fuzzmux-claude-notify-desktop 0)" = 1 ]; then
-  desktop_notify "$where" "${verb}${title:+: ${title}}" "fuzzmux-claude-${pane}"
-fi
+case "$event" in
+stop | notify-idle)
+  # A finished turn may only be a pause: Claude reports background work in its
+  # state file about a second after Stop. Decide in a detached helper so the
+  # hook returns at once; the state was already recorded above and the picker
+  # corrects itself from the state file regardless.
+  delay="$(opt @fuzzmux-claude-notify-delay 2)"
+  (
+    sleep "$delay"
+    kind="$(claude_background_status)"
+    if [ -n "$kind" ]; then
+      tmux set-option -p -t "$pane" @fuzzmux-claude-state background \; \
+        set-option -p -t "$pane" @fuzzmux-claude-since "$(date +%s)" \; \
+        set-option -p -t "$pane" @fuzzmux-claude-detail "$kind" 2>/dev/null
+      refresh_clients
+    else
+      send_notifications
+    fi
+  ) >/dev/null 2>&1 </dev/null &
+  ;;
+*)
+  send_notifications
+  ;;
+esac
 
 exit 0
