@@ -261,7 +261,8 @@ while IFS="$DEL" read -r sid last_ts project _count title prompts; do
   ((${#dir} > 38)) && dir="${ELLIPSIS}${dir: -37}"
   [[ -n "$title" ]] || title="-"
   ((${#title} > 50)) && title="${title:0:49}${ELLIPSIS}"
-  printf '%s%s%s%s%s%s%s%s%s\n' "$sid" "$DEL" "$state" "$DEL" "$age" "$DEL" "$dir" "$DEL" "$title" >>"$META"
+  # meta: sid US state US age US dir(display) US title US project(full path)
+  printf '%s%s%s%s%s%s%s%s%s%s%s\n' "$sid" "$DEL" "$state" "$DEL" "$age" "$DEL" "$dir" "$DEL" "$title" "$DEL" "$project" >>"$META"
   row_visible_into visible "$state" "$age" "$dir" "$title"
   printf '%s%s-%s%s  %s %s\n' "$sid" "$DEL" "$DEL" "$visible" "$BAR" "$prompts" >>"$ROWS"
   # Every line of the conversation as a row of its own: sid US lineno US prefix line
@@ -335,13 +336,17 @@ if [[ -n "${RUN_PANE[$sid]:-}" ]] && tmux display-message -p -t "${RUN_PANE[$sid
   exit 0
 fi
 
-# Where did it run last time? Registry first, project directory as fallback.
+# Where did it run last time? Registry first; the session's project directory
+# (full path from the metadata) when the registry has nothing or the recorded
+# directory is gone.
 tsess="" wid="" cwd=""
 loc="$(registry_lookup "$sid")"
 if [[ -n "$loc" ]]; then
   IFS="$DEL" read -r tsess wid _ _ cwd _ <<<"$loc"
 fi
-[[ -n "$cwd" ]] || cwd="$(awk -F "$DEL" -v sid="$sid" '$1 == sid { print $3; exit }' "$META")"
+if [[ -z "$cwd" || ! -d "$cwd" ]]; then
+  cwd="$(awk -F "$DEL" -v sid="$sid" '$1 == sid { print $6; exit }' "$META")"
+fi
 cwd="${cwd/#\~/$HOME}"
 [[ -d "$cwd" ]] || cwd="$HOME"
 
