@@ -15,6 +15,7 @@ Works with [fuzzmux.nvim](https://github.com/pteroctopus/fuzzmux.nvim) to track 
 - **Pane jumplist** - Browser/Vim-style back/forward navigation through your focused-pane history (global across all sessions)
 - **Fuzzy find Claude Code agents** - Switch between [Claude Code](https://code.claude.com) instances running in any pane of any session, most urgent first (permission prompt, question, finished turn, working)
 - **Claude Code notifications** - Optional Claude Code hooks show a tmux status-line message the moment an agent needs your input, optionally a desktop notification that jumps to the pane when clicked, plus a status-line summary snippet
+- **Claude Code session history** - fzf over every line of every conversation ever run; switch to the running instance or resume a closed session in the window it last used
 - **Progressive filtering** - Use a single key (default `ctrl-f`) to progressively filter results by session, window, or pane
 - **Active/attached markers** - Visual `*` indicator in the first column showing attached sessions, active windows, and active panes
 - **Colorized output** - Color-coded session/window identifiers for better visibility
@@ -36,7 +37,7 @@ https://github.com/user-attachments/assets/593dd544-7c35-41aa-b9ff-09fdce9b9b81
 - **terminal-notifier** (optional, macOS) - For Claude Code desktop notifications that jump to the pane when clicked (`brew install terminal-notifier`)
 - **notify-send** (optional, Linux) - For Claude Code desktop notifications, without a click action (`libnotify-bin` on Debian/Ubuntu, `libnotify` on Arch and Fedora)
 - **fuzzmux.nvim** (optional but HIGHLY recommended) - Required for Neovim buffer tracking functionality
-- **Claude Code** (optional) - A 2.1.x release that writes `~/.claude/sessions/<pid>.json` state files (the same data `claude agents --json` shows); required only for the Claude Code agent switcher
+- **Claude Code** (optional) - A 2.1.x release that writes `~/.claude/sessions/<pid>.json` state files (the same data `claude agents --json` shows) and the `~/.claude/history.jsonl` prompt history; needed only for the Claude Code agent switcher and the session history
 
 ## Installation
 
@@ -70,10 +71,11 @@ tmux source-file ~/.tmux.conf
 
 ### Optional: Claude Code integration
 
-The Claude Code agent switcher works right after installation (it needs `jq`).
-If you also want to be notified when an agent needs you, and the finer states
-(`permission`, `question`, unread vs. seen), register the plugin's Claude Code
-hooks once:
+The Claude Code agent switcher and the session history work right after
+installation (they need `jq`). If you also want to be notified when an agent
+needs you, the finer states (`permission`, `question`, unread vs. seen), and
+closed sessions resumed in the window they last used, register the plugin's
+Claude Code hooks once:
 
 ```bash
 ~/.tmux/plugins/fuzzmux.tmux/bin/claude_hooks_install.sh
@@ -93,6 +95,7 @@ With default settings, the following keybindings are available (after pressing y
 - `prefix` + <kbd>w</kbd> - Fuzzy find and switch to a window
 - `prefix` + <kbd>f</kbd> - Fuzzy find and switch to a Neovim buffer (needs fuzzmax.nvim plugin)
 - `prefix` + <kbd>a</kbd> - Fuzzy find and switch to a Claude Code agent
+- `prefix` + <kbd>y</kbd> - Search all Claude Code sessions ever run and switch to or resume one
 
 **With zoom (uppercase keys):**
 - `prefix` + <kbd>S</kbd> - Fuzzy find and switch to a session (with zoom)
@@ -100,6 +103,7 @@ With default settings, the following keybindings are available (after pressing y
 - `prefix` + <kbd>W</kbd> - Fuzzy find and switch to a window (with zoom)
 - `prefix` + <kbd>F</kbd> - Fuzzy find and switch to a Neovim buffer (with zoom) (needs fuzzmax.nvim plugin)
 - `prefix` + <kbd>A</kbd> - Fuzzy find and switch to a Claude Code agent (with zoom)
+- `prefix` + <kbd>Y</kbd> - Search all Claude Code sessions and switch to or resume one (with zoom)
 
 **Pane jumplist (back/forward):**
 - `prefix` + <kbd>Ctrl-h</kbd> - Jump **back** to the previously focused pane
@@ -163,6 +167,7 @@ States, in the order they are listed:
 | `question`   | Claude asked you a question                                    |
 | `waiting`    | Claude finished a turn that you have not looked at yet         |
 | `working`    | Claude is busy                                                 |
+| `background` | The turn is over but a background shell, monitor or agent is still running (kind in parentheses); Claude wakes up by itself when it finishes, nothing is expected from you |
 | `idle`       | At the prompt with nothing unread: fresh or resumed session, or a finished turn you already looked at |
 
 `waiting` clears itself the moment you focus the agent's pane, by whatever
@@ -191,6 +196,7 @@ styles, using your terminal's named colors by default. Override them with tmux
 set -g @fuzzmux-claude-attention-style 'fg=red,bold'   # permission, question
 set -g @fuzzmux-claude-waiting-style 'fg=yellow'       # finished turn
 set -g @fuzzmux-claude-working-style 'fg=brightgreen'  # busy
+set -g @fuzzmux-claude-background-style 'fg=cyan'      # background work running
 set -g @fuzzmux-claude-idle-style 'dim'                # fresh session
 
 # Rose Pine example
@@ -207,10 +213,14 @@ other switchers, and `@fuzzmux-colors-enabled '0'` turns everything plain.
 No setup is needed for the switcher. Claude Code writes a state file for every
 running instance (`~/.claude/sessions/<pid>.json`, honouring
 `$CLAUDE_CONFIG_DIR`) that records the tmux pane it runs in and whether it is
-busy or idle; fuzzmux reads those files with `jq` and drops entries whose
-process or pane is gone. Without the hooks below, agents are only `working` or
-`idle`: Claude Code alone cannot tell a pending permission prompt from ordinary
-work, nor an unread finished turn from one you already looked at.
+busy, idle, waiting for you, or still running background work; fuzzmux reads
+those files with `jq` and drops entries whose process or pane is gone. Without
+the hooks below, agents show as `working`, `idle`, `permission` (Claude's
+"waiting" status, which does not say whether a tool or a question is pending)
+or `background`: Claude Code alone cannot name the tool that waits for
+approval, nor tell an unread finished turn from one you already looked at.
+`background` comes only from the state file, since no hook fires for
+background shells, monitors or agents.
 
 The optional hooks refine this: they record the exact state as pane user options
 (`@fuzzmux-claude-state`, `@fuzzmux-claude-since`, `@fuzzmux-claude-detail`,
@@ -258,6 +268,8 @@ attached client". Options:
 set -g @fuzzmux-claude-notify '0'            # no messages (state tracking stays on)
 set -g @fuzzmux-claude-notify-focused '1'    # also notify for the pane you are viewing
 set -g @fuzzmux-claude-focus-check 'pane'    # ignore terminal focus (see above)
+set -g @fuzzmux-claude-notify-delay '2'      # seconds between a finished turn and its
+                                             # notification (see below)
 set -g @fuzzmux-claude-notify-duration '8000' # milliseconds (default 5000)
 set -g @fuzzmux-claude-notify-bell '1'       # also ring the pane's bell (see below)
 ```
@@ -289,6 +301,16 @@ click action. All three channels (message, bell, desktop) are
 independent switches that share the same triggers and the same focused-pane
 suppression.
 
+A finished turn is not always the end: when Claude ends its turn with a
+background shell, monitor or agent still running, it continues by itself once
+that finishes. The `Stop` hook cannot see this, so the hook waits
+`@fuzzmux-claude-notify-delay` seconds (default 2) and re-reads Claude's state
+file: if it reports background work, the agent becomes `background` and no
+notification is sent; otherwise the notification goes out as usual. The
+"finished" notification therefore arrives about two seconds late, and the real
+finish after the background work is notified normally. The same check guards
+the idle reminder.
+
 Installer options: `--settings <file>` (for example `.claude/settings.json` for
 project scope), `--dry-run` (show the diff), `--print` (print the JSON fragment
 for manual editing), `--uninstall`.
@@ -298,6 +320,78 @@ The hook script exits silently when Claude Code is not running inside tmux
 `claude --bare` skips all hooks. Background agents (`claude --bg`) have no pane
 and are not listed.
 
+### Session history: find any past session and resume it in place
+
+Press `prefix` + <kbd>y</kbd> to search every Claude Code session you ever ran,
+not only the running ones:
+
+```
+  state       age   project                               │ conversation line     ctrl-f: sessions of these matches
+  working     2m    ~/Development/app                     │ [assistant 2026-09-11 14:12]
+  working     2m    ~/Development/app                     │ The middleware now refreshes the token before it expires.
+  closed      3h    ~/Development/api                     │ [user 2026-09-11 11:03]
+  closed      3h    ~/Development/api                     │ fix the flaky integration test
+```
+
+and after <kbd>Ctrl-f</kbd>:
+
+```
+  state       age   project                               │ first prompt     ctrl-f: text search   ctrl-t: all sessions
+  working     2m    ~/Development/app                     │ refactor the auth middleware
+  closed      3h    ~/Development/api                     │ fix the flaky integration test
+  closed      2d    ~/Development/infra                   │ rotate the staging certs
+```
+
+The popup opens in **text** mode (`text >`): one row per line of every
+conversation, newest session first, matched by fzf itself with its usual rules
+(`'exact`, fuzzy, `^prefix`, `!not`, `a | b`). The header names the columns:
+`state` (running state, or `closed`), `age` of the session's last prompt,
+`project` directory, then after `│` the conversation line, from your prompts as
+well as Claude's answers; the `[user 2026-09-11 14:12]` header lines of the
+messages are rows too, so a date matches. Only the part after the bar is
+matched, so a project name or a state word never skews a text search. The
+preview shows the conversation around the selected line, the line itself
+highlighted, under the session's location. Enter acts on the row's session.
+
+Press <kbd>Ctrl-f</kbd> (the filter key) for the `sessions >` list: one row per
+session with state, age, project and the first real prompt as title, all of it
+searchable, and the preview listing the session's prompts newest first. If you
+had typed a text query, the sessions list is restricted to the sessions of the
+lines that matched, and the prompt reads `sessions (from text search) >`: search
+for a passage first, then narrow by project or state. <kbd>Ctrl-t</kbd> (option
+`@fuzzmux-claude-history-bind-all`) lifts the restriction and lists every
+session. With no text query the list starts complete. The query is cleared on
+each switch; <kbd>Ctrl-f</kbd> again returns to the full text list.
+
+The conversation text comes from a per-session extract of the transcript
+(prompts and answers only, no tool output or JSON) kept under
+`~/.cache/fuzzmux/claude-text/` and refreshed whenever a transcript changed, so
+the first popup after many new sessions takes a moment longer. Rows come from
+Claude Code's prompt history (`~/.claude/history.jsonl`) for the overview and
+from that extract for the text mode.
+
+Resuming lands you at the end of the conversation, since `claude --resume`
+cannot open at a given message; the preview shows the hit in context before you
+decide. Inside the resumed session, Claude Code's transcript mode finds the
+passage again: <kbd>Ctrl-o</kbd>, then <kbd>/</kbd> to search, <kbd>n</kbd> /
+<kbd>N</kbd> for the next or previous match.
+
+<kbd>Enter</kbd> on a running session switches to its pane. On a closed one it
+resumes the session with `claude --resume <id>` **where it last ran**: a new
+pane split into the window it used before, or if that window is gone a new
+window in that tmux session, or if that session is gone too a new window in your
+current session. The working directory is the session's project directory.
+The location comes from a small registry the hook appends to on every prompt
+and finished turn (`$XDG_STATE_HOME/fuzzmux/claude-sessions.log`, default
+`~/.local/state/...`); sessions from before the hooks were installed fall back
+to a new window in the current session.
+
+Options: `@fuzzmux-bind-claude-history` / `-zoom` (default `y` / `Y`),
+`@fuzzmux-claude-history-enabled`, `@fuzzmux-claude-history-preview-enabled`,
+`@fuzzmux-claude-history-preview-window` (default `up:50%` here, since hits in
+context read better across the full width), and `@fuzzmux-claude-command` (the
+`claude` binary or wrapper to run, default `claude`). Requires `jq`.
+
 ### Status-line summary
 
 `bin/claude_status.sh` prints a compact summary for a `#()` in your status line:
@@ -306,9 +400,9 @@ and are not listed.
 set -g status-right '#(~/.tmux/plugins/fuzzmux.tmux/bin/claude_status.sh) %H:%M'
 ```
 
-Output like `!2 *1 ~3` means two agents need you (permission or question), one
-is waiting for input and three are working; nothing is printed when no agent
-runs. It refreshes with `status-interval`, so a short interval such as `5` keeps
+Output like `!2 *1 ~3 &1` means two agents need you (permission or question),
+one finished a turn you have not looked at, three are working and one has
+background work running; nothing is printed when no agent runs. It refreshes with `status-interval`, so a short interval such as `5` keeps
 it current. Each group is wrapped in the matching `@fuzzmux-claude-*-style` (see
 Colors above). Options: `--no-colors`, `--idle` (also count idle agents as
 `.N`), `--prefix=<text>`.
@@ -395,6 +489,7 @@ set -g @fuzzmux-pane-enabled '0'      # Disable pane switcher
 set -g @fuzzmux-window-enabled '0'    # Disable window switcher
 set -g @fuzzmux-nvim-enabled '0'      # Disable nvim buffer switcher
 set -g @fuzzmux-claude-enabled '0'    # Disable Claude Code agent switcher (removes its focus hooks)
+set -g @fuzzmux-claude-history-enabled '0' # Disable Claude Code session history
 set -g @fuzzmux-jumplist-enabled '0'  # Disable pane jumplist (removes its hooks)
 
 # Pane jumplist history cap (default 100)
@@ -406,6 +501,7 @@ set -g @fuzzmux-pane-preview-enabled '0'
 set -g @fuzzmux-window-preview-enabled '0'
 set -g @fuzzmux-nvim-preview-enabled '0'
 set -g @fuzzmux-claude-preview-enabled '0'
+set -g @fuzzmux-claude-history-preview-enabled '0'
 ```
 
 ### Popup Appearance
@@ -429,6 +525,7 @@ set -g @fuzzmux-pane-preview-window 'right:30%'
 set -g @fuzzmux-window-preview-window 'right:30%'
 set -g @fuzzmux-nvim-preview-window 'right:30%'
 set -g @fuzzmux-claude-preview-window 'right:50%' # agent output is wide; give it room
+set -g @fuzzmux-claude-history-preview-window 'up:50%' # default for this one: hits in context
 ```
 
 ### Color Customization
@@ -452,7 +549,7 @@ set -g @fuzzmux-color-palette '#f7768e,#9ece6a,#e0af68,#7aa2f7,#bb9af7,#7dcfff'
 
 **Note:** When `@fuzzmux-color-palette` is not set or is empty, fuzzmux uses your terminal's default ANSI colors (red, green, yellow, blue, magenta, cyan), which automatically adapt to your terminal's color scheme.
 
-The Claude Code agent states (`permission`, `waiting`, `working`, `idle`) have their own four `@fuzzmux-claude-*-style` options in tmux style syntax; see [Claude Code Agents](#claude-code-agents).
+The Claude Code agent states (`permission`/`question`, `waiting`, `working`, `background`, `idle`) have their own five `@fuzzmux-claude-*-style` options in tmux style syntax, shared by the agent switcher, the session history and the status-line summary; see [Claude Code Agents](#claude-code-agents).
 
 ### Progressive Filtering
 
@@ -472,6 +569,7 @@ set -g @fuzzmux-fzf-bind-filtering 'alt-f'
 - **Pane switcher**: Press 1st for session filter, 2nd for window filter, 3rd to clear
 - **Nvim buffer switcher**: Press 1st for session, 2nd for window, 3rd for pane, 4th to clear
 - **Claude Code agent switcher**: Press once to show only agents that need you, press again to clear
+- **Claude Code session history**: Press once to switch from conversation lines to the sessions list (restricted to the sessions of the current text matches), press again to return; <kbd>Ctrl-t</kbd> (`@fuzzmux-claude-history-bind-all`) lifts the restriction
 
 ### Custom Key Bindings
 
@@ -489,6 +587,8 @@ set -g @fuzzmux-bind-nvim 'f'           # prefix + f for nvim buffers
 set -g @fuzzmux-bind-nvim-zoom 'F'      # prefix + F for nvim buffers with zoom
 set -g @fuzzmux-bind-claude 'a'         # prefix + a for Claude Code agents
 set -g @fuzzmux-bind-claude-zoom 'A'    # prefix + A for Claude Code agents with zoom
+set -g @fuzzmux-bind-claude-history 'y' # prefix + y for Claude Code session history
+set -g @fuzzmux-bind-claude-history-zoom 'Y' # prefix + Y for the session history with zoom
 set -g @fuzzmux-bind-jump-back 'C-h'    # prefix + Ctrl-h to jump back
 set -g @fuzzmux-bind-jump-forward 'C-l' # prefix + Ctrl-l to jump forward
 
@@ -507,6 +607,8 @@ set -g @fuzzmux-bind-nvim '!M-f'         # Alt+f without prefix for nvim buffers
 set -g @fuzzmux-bind-nvim-zoom '!M-F'    # Alt+Shift+f without prefix for nvim buffers with zoom
 set -g @fuzzmux-bind-claude '!M-c'       # Alt+c without prefix for Claude Code agents
 set -g @fuzzmux-bind-claude-zoom '!M-C'  # Alt+Shift+c without prefix for Claude Code agents with zoom
+set -g @fuzzmux-bind-claude-history '!M-y'      # Alt+y without prefix for the session history
+set -g @fuzzmux-bind-claude-history-zoom '!M-Y' # Alt+Shift+y without prefix for the session history with zoom
 ```
 
 Or set up completely custom bindings:
@@ -526,6 +628,8 @@ bind-key -n M-f run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_nvim_buffer_swit
 bind-key -n M-F run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_nvim_buffer_switcher.sh --zoom"
 bind-key -n M-c run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_claude_switcher.sh"
 bind-key -n M-C run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_claude_switcher.sh --zoom"
+bind-key -n M-y run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_claude_history_switcher.sh --preview --preview-window=up:50%"
+bind-key -n M-Y run-shell "~/.tmux/plugins/fuzzmux.tmux/bin/fzf_claude_history_switcher.sh --preview --preview-window=up:50% --zoom"
 ```
 
 **Note:** When using custom bindings, the scripts **don't respect** global configuration settings (`@fuzzmux-popup-*`, `@fuzzmux-colors-enabled`, `@fuzzmux-<feature>-preview-enabled`) automatically. You need to add the desired options (`--preview`, `--colors`, `--zoom`, etc.) directly to the command.
@@ -645,6 +749,11 @@ When you select a buffer:
 Press `prefix` + <kbd>a</kbd>; the list, states, markers and filtering are
 described in [Claude Code Agents](#claude-code-agents).
 
+### Claude Code Session History
+
+Press `prefix` + <kbd>y</kbd>; text mode, the sessions list and resuming are
+described in [Session history](#session-history-find-any-past-session-and-resume-it-in-place).
+
 ## Troubleshooting
 
 ### "fzf is not installed" error
@@ -692,6 +801,16 @@ This means one of:
 4. You use a custom `$CLAUDE_CONFIG_DIR` that is not visible to tmux's environment
 
 Installing the hooks (see [Claude Code Agents](#claude-code-agents)) makes detection independent of the state files.
+
+### A session is missing from the session history
+
+The history lists only sessions whose transcript still exists under
+`~/.claude/projects/`, because `claude --resume` needs it. Claude Code deletes
+transcripts after its cleanup period (the `cleanupPeriodDays` setting, 30 days
+by default), so older sessions disappear from the list even though their
+prompts remain in `~/.claude/history.jsonl`. "No Claude Code history found"
+means that file itself is absent, for example with a custom
+`$CLAUDE_CONFIG_DIR` that tmux does not see.
 
 ### Claude Code notifications do not appear
 
@@ -762,10 +881,10 @@ When switching buffers, fuzzmux.tmux uses Neovim's RPC socket to send buffer swi
 
 Two sources are merged by `bin/claude_lib.sh`:
 
-1. **Claude Code state files** - `~/.claude/sessions/<pid>.json`, written by Claude Code itself for every running instance. fuzzmux reads `tmux` (`session:@window.%pane`), `status` (`busy`/`idle`), `statusUpdatedAt`, `name` and `cwd`, and skips files whose process is dead or whose pane is gone.
+1. **Claude Code state files** - `~/.claude/sessions/<pid>.json`, written by Claude Code itself for every running instance. fuzzmux reads `tmux` (`session:@window.%pane`), `status`, `statusUpdatedAt`, `name` and `cwd`, and skips files whose process is dead or whose pane is gone. Status values map as `busy`/`compacting` to `working`, `idle`/`starting` to `idle`, `waiting` to `permission`, and any other value (`shell`, `monitor`, `agent`, ...) to `background` with the value as detail.
 2. **Pane user options** - written by `bin/claude_hook.sh` from Claude Code hooks. `$TMUX_PANE` is inherited by the hook from the Claude process, so the state lands on the right pane without any lookup, and disappears with the pane:
    ```
-   @fuzzmux-claude-state   permission | question | waiting | working | idle
+   @fuzzmux-claude-state   permission | question | waiting | working | background | idle
    @fuzzmux-claude-since   epoch seconds when the state was entered
    @fuzzmux-claude-detail  e.g. the tool awaiting permission
    @fuzzmux-claude-mode    permission mode from the last hook payload
@@ -774,6 +893,16 @@ Two sources are merged by `bin/claude_lib.sh`:
 Hook events map to states as follows: `SessionStart` to `idle` (untouched for `compact`, which happens mid-turn); `UserPromptSubmit`, `PostToolUse` and `PostToolUseFailure` to `working`; `PermissionRequest` and `Notification(permission_prompt)` to `permission`; `PreToolUse(AskUserQuestion)` to `question`; `Stop` to `waiting`, or straight to `idle` when the pane is focused; `Notification(idle_prompt)` repeats the reminder for a `waiting` agent and turns a `working` one `idle` (an interrupted turn fires no `Stop`); `SessionEnd` clears the options. The notification is a `display-message -d` on every attached client, followed by `refresh-client -S`.
 
 `bin/claude_focus.sh` runs from the same tmux focus hooks as the jumplist recorder (`pane-focus-in`, `after-select-pane`, `after-select-window`, `client-session-changed`, `session-window-changed`) and flips the focused pane from `waiting` to `idle`. `init.sh` installs and removes both sets of hooks with the same helper, guarded by a global flag so a config reload never duplicates them.
+
+### Session History
+
+`bin/fzf_claude_history_switcher.sh` combines three sources:
+
+1. **Prompt history** - `~/.claude/history.jsonl`, one JSON line per prompt with its session id, project directory and time; grouped by session it gives the sessions list, the first real prompt as title, and the newest-first order.
+2. **Conversation text** - extracted with `jq` from each transcript (`~/.claude/projects/<dir>/<session>.jsonl`) into `~/.cache/fuzzmux/claude-text/<session>.txt`: only the text of user and assistant messages, with `[role date time]` headers, no tool output or JSON. A file is rebuilt when its transcript is newer; caches of deleted transcripts are removed.
+3. **Location registry** - `$XDG_STATE_HOME/fuzzmux/claude-sessions.log`, appended by the hook on `SessionStart`, `UserPromptSubmit` and `Stop` with the session id, tmux session, window id and index, pane and cwd. Readers take the last line per session; the file is compacted when it grows past a few thousand lines.
+
+fzf rows are `session id │ line number │ state age project │ text`, with `│` as the field delimiter, `--with-nth=3..` for display and `--nth=2..` for matching in text mode, so the visible bar is also the boundary of the search. Switching modes reloads the other list and adjusts `--nth` with `change-nth`; the restriction comes from `select-all` plus fzf's `{+f}` selection file, from which the script keeps the session ids.
 
 ## Related Projects
 
