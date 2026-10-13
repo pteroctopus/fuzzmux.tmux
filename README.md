@@ -136,19 +136,27 @@ Press `prefix` + <kbd>a</kbd> to list every [Claude Code](https://code.claude.co
 instance running in a tmux pane, across all sessions, most urgent first:
 
 ```
-  permission (Bash)  2m   @api   #1  %2  manual  Fix flaky integration test  ~/Development/api
-  question           40s  @docs  #0  %1  auto    Rewrite quick start         ~/Development/docs
-+ waiting            14m  @app   #2  %1  plan    Rotate the staging certs    ~/Development/app
-* working            5s   @app   #2  %0  edits   Refactor auth middleware    ~/Development/app
+   state              age  session  win  pane  ctx   mode    title                       cwd
+  permission (Bash)  2m   @api     #1   %2    91%   manual  Fix flaky integration test  ~/Development/api
+  question           40s  @docs    #0   %1    12%   auto    Rewrite quick start         ~/Development/docs
++ waiting            14m  @app     #2   %1    731k  plan    Rotate the staging certs    ~/Development/app
+* working            5s   @app     #2   %0    64%   edits   Refactor auth middleware    ~/Development/app
 ```
 
-Columns: marker, state, time spent in that state, session, window, pane,
-Claude's permission mode, the agent's title (Claude Code's own pane title) and
-its working directory. The marker is `*` for the pane you opened the popup
-from and `+` for another pane of the same window, so you can tell an agent that
-is already on your screen from one that needs a switch; rows in your current
-session show the session name in bold. Press <kbd>Enter</kbd> to switch to the
-agent.
+Columns, named in the header line: marker, state, time spent in that state,
+session, window, pane, context usage, Claude's permission mode, the agent's
+title (Claude Code's own pane title) and its working directory. The marker is
+`*` for the pane you opened the popup from and `+` for another pane of the same
+window, so you can tell an agent that is already on your screen from one that
+needs a switch; rows in your current session show the session name in bold.
+Press <kbd>Enter</kbd> to switch to the agent.
+
+The `ctx` column shows how full the agent's context window is. As a percentage
+it comes from Claude Code's own status line data (see [Context usage in the
+picker](#context-usage-in-the-picker) for the one-time setup) and turns yellow
+from 70% and red from 90%, using the waiting and attention styles. Without that
+setup the column falls back to the token count of the last turn read from the
+session's transcript, shown as `731k`, or `-` when nothing is known.
 
 The mode column shows how much the agent may do on its own: `manual` (Claude's
 `default`, asks for every tool), `edits` (`acceptEdits`), `plan`, `auto`,
@@ -312,13 +320,37 @@ finish after the background work is notified normally. The same check guards
 the idle reminder.
 
 Installer options: `--settings <file>` (for example `.claude/settings.json` for
-project scope), `--dry-run` (show the diff), `--print` (print the JSON fragment
-for manual editing), `--uninstall`.
+project scope), `--statusline[=<command>]` (also wrap the status line command,
+see [Context usage in the picker](#context-usage-in-the-picker)), `--dry-run`
+(show the diff), `--print` (print the hook JSON fragment for manual editing),
+`--uninstall` (removes the hooks and unwraps the status line).
 
 The hook script exits silently when Claude Code is not running inside tmux
 (`$TMUX_PANE` unset) and never fails, so it cannot interfere with Claude Code.
 `claude --bare` skips all hooks. Background agents (`claude --bg`) have no pane
 and are not listed.
+
+### Context usage in the picker
+
+Claude Code reports the context window usage only to the status line command
+(as `context_window.used_percentage` in the JSON it sends on every update).
+`bin/claude_statusline.sh` is a small wrapper for that command: it records the
+percentage as the pane option `@fuzzmux-claude-context` and then runs your real
+status line command with the same JSON, so what you see at the bottom of Claude
+Code does not change. Install it with:
+
+```bash
+~/.tmux/plugins/fuzzmux.tmux/bin/claude_hooks_install.sh --statusline
+```
+
+This wraps the `statusLine.command` already in `~/.claude/settings.json`, for
+example `npx -y ccstatusline@latest`; pass `--statusline='<command>'` to set the
+inner command explicitly. With no status line configured at all, the wrapper
+prints `ctx NN%` itself so the row is not empty; note that Claude Code hides
+most of its footer keyboard hints as soon as any status line is configured.
+`--uninstall` restores the previous command. Sessions already running report their usage at their next
+status line update, meaning the next prompt or tool call; until then the picker
+shows the transcript-based token count instead.
 
 ### Session history: find any past session and resume it in place
 
@@ -826,6 +858,16 @@ means that file itself is absent, for example with a custom
 - Clicking jumps only with terminal-notifier; the `osascript` fallback and `notify-send` show the notification but ignore clicks
 - The click activates the app named by `@fuzzmux-claude-notify-desktop-app`, defaulting to the terminal tmux was started from; set it if tmux runs under a different terminal
 
+### ctx column shows token counts or dashes instead of a percentage
+
+A percentage needs the status line wrapper (`claude_hooks_install.sh
+--statusline`), because only the status line receives the context window size
+from Claude Code. Sessions that have not updated their status line since the
+wrapper was installed show the token count from their transcript (`731k`) until
+their next prompt or tool call; `-` means neither a percentage nor a transcript
+with usage data was found (fresh session, or a transcript Claude Code already
+deleted).
+
 ### Mode column shows only dashes
 
 The permission mode comes from hook payloads. Agents that have had no hook event
@@ -888,6 +930,7 @@ Two sources are merged by `bin/claude_lib.sh`:
    @fuzzmux-claude-since   epoch seconds when the state was entered
    @fuzzmux-claude-detail  e.g. the tool awaiting permission
    @fuzzmux-claude-mode    permission mode from the last hook payload
+   @fuzzmux-claude-context percent of the context window used (status line wrapper)
    ```
 
 Hook events map to states as follows: `SessionStart` to `idle` (untouched for `compact`, which happens mid-turn); `UserPromptSubmit`, `PostToolUse` and `PostToolUseFailure` to `working`; `PermissionRequest` and `Notification(permission_prompt)` to `permission`; `PreToolUse(AskUserQuestion)` to `question`; `Stop` to `waiting`, or straight to `idle` when the pane is focused; `Notification(idle_prompt)` repeats the reminder for a `waiting` agent and turns a `working` one `idle` (an interrupted turn fires no `Stop`); `SessionEnd` clears the options. The notification is a `display-message -d` on every attached client, followed by `refresh-client -S`.

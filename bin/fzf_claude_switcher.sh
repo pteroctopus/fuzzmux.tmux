@@ -143,9 +143,10 @@ printf -v NOW '%(%s)T' -1
 # row). The first field is the pane id, separated by CLAUDE_DEL and hidden in
 # fzf via --delimiter/--with-nth; a whitespace split would also eat the leading
 # blank of the marker column on unmarked rows and shift the marked row.
-PANES=() MARKERS=() STATES=() LABELS=() AGES=() SESSIONS=() WINDOWS=() INDEXES=() MODES=() TITLES=() CWDS=()
-w_label=0 w_age=0 w_sess=0 w_win=0 w_idx=0 w_mode=0 w_title=0
-while IFS="$CLAUDE_DEL" read -r pane state since detail _name cwd sess win idx title _pa _wa _sa _src mode _sid; do
+PANES=() MARKERS=() STATES=() LABELS=() AGES=() SESSIONS=() WINDOWS=() INDEXES=() CTXS=() MODES=() TITLES=() CWDS=()
+# Column widths start at the header words so the header always lines up.
+w_label=5 w_age=3 w_sess=7 w_win=3 w_idx=4 w_ctx=3 w_mode=4 w_title=5
+while IFS="$CLAUDE_DEL" read -r pane state since detail _name cwd sess win idx title _pa _wa _sa _src mode _sid ctx; do
   active_marker=" "
   if [[ "$pane" == "$CURRENT_PANE_ID" ]]; then
     active_marker="*"
@@ -161,9 +162,11 @@ while IFS="$CLAUDE_DEL" read -r pane state since detail _name cwd sess win idx t
   [[ -n "$title" ]] || title="${_name:--}"
   [[ -n "$cwd" ]] || cwd="-"
   mode="$(claude_mode_label "$mode")"
+  [[ -n "$ctx" ]] || ctx="-"
 
   PANES+=("$pane") MARKERS+=("$active_marker") STATES+=("$state") LABELS+=("$label") AGES+=("$age")
-  SESSIONS+=("@${sess}") WINDOWS+=("#${win}") INDEXES+=("%${idx}") MODES+=("$mode") TITLES+=("$title") CWDS+=("$cwd")
+  SESSIONS+=("@${sess}") WINDOWS+=("#${win}") INDEXES+=("%${idx}") CTXS+=("$ctx") MODES+=("$mode") TITLES+=("$title") CWDS+=("$cwd")
+  ((${#ctx} > w_ctx)) && w_ctx=${#ctx}
   ((${#mode} > w_mode)) && w_mode=${#mode}
   ((${#label} > w_label)) && w_label=${#label}
   ((${#age} > w_age)) && w_age=${#age}
@@ -191,10 +194,28 @@ for i in "${!PANES[@]}"; do
     line+="$(claude_pad "${SESSIONS[$i]}" "$w_sess")  $(claude_pad "${WINDOWS[$i]}" "$w_win")  "
     line+="$(claude_pad "${INDEXES[$i]}" "$w_idx")  "
   fi
+  # Context usage, coloured like a warning once the window fills up: the
+  # waiting style from 70%, the attention style from 90%.
+  ctx="${CTXS[$i]}"
+  ctx_color=""
+  if [[ "$USE_COLORS" == "true" && "$ctx" == *% ]]; then
+    n="${ctx%\%}"
+    if ((n >= 90)); then
+      ctx_color="$(state_ansi permission)"
+    elif ((n >= 70)); then
+      ctx_color="$(state_ansi waiting)"
+    fi
+  fi
+  line+="${ctx_color}$(claude_pad "$ctx" "$w_ctx")${ctx_color:+$RESET}  "
   line+="$(claude_pad "${MODES[$i]}" "$w_mode")  $(claude_pad "${TITLES[$i]}" "$w_title")  ${CWDS[$i]}"
   FORMATTED_LIST+="${line}"$'\n'
 done
 FORMATTED_LIST="${FORMATTED_LIST%$'\n'}"
+
+# Column names, laid out like a row (three blanks stand in for the marker).
+HEADER="   $(claude_pad state "$w_label")  $(claude_pad age "$w_age")  $(claude_pad session "$w_sess")  "
+HEADER+="$(claude_pad win "$w_win")  $(claude_pad pane "$w_idx")  $(claude_pad ctx "$w_ctx")  "
+HEADER+="$(claude_pad mode "$w_mode")  $(claude_pad title "$w_title")  cwd"
 
 # Start fzf selection
 PROMPT="claude > "
@@ -221,12 +242,12 @@ PREVIEW_CMD='bash -c '\''
 if [[ "$PREVIEW" == "true" ]]; then
   SELECTION=$(
     echo "$FORMATTED_LIST" | fzf --ansi --exit-0 "$FZF_MATCH" --prompt "$PROMPT" --bind="$BINDS" \
-      --delimiter="$CLAUDE_DEL" --with-nth=2 \
+      --delimiter="$CLAUDE_DEL" --with-nth=2 --header="$HEADER" \
       --preview "$PREVIEW_CMD" \
       --preview-window="${PREVIEW_WINDOW}"
   ) || exit 0
 else
-  SELECTION=$(echo "$FORMATTED_LIST" | fzf --ansi --exit-0 "$FZF_MATCH" --prompt "$PROMPT" --bind="$BINDS" --delimiter="$CLAUDE_DEL" --with-nth=2) || exit 0
+  SELECTION=$(echo "$FORMATTED_LIST" | fzf --ansi --exit-0 "$FZF_MATCH" --prompt "$PROMPT" --bind="$BINDS" --delimiter="$CLAUDE_DEL" --with-nth=2 --header="$HEADER") || exit 0
 fi
 
 # Switch to the selected agent's pane

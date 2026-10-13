@@ -4,9 +4,14 @@ set -euo pipefail
 # Install or remove the fuzzmux Claude Code hooks in a Claude Code settings file.
 #
 # Usage:
-#   claude_hooks_install.sh [--settings <file>] [--dry-run]
+#   claude_hooks_install.sh [--statusline[=<cmd>]] [--settings <file>] [--dry-run]
 #   claude_hooks_install.sh --uninstall [--settings <file>] [--dry-run]
 #   claude_hooks_install.sh --print
+#
+# --statusline also wraps the status line command in bin/claude_statusline.sh,
+# which records each session's context usage for the agent picker; the command
+# already configured (or <cmd>) keeps running inside the wrapper. --uninstall
+# unwraps it again.
 #
 # Default settings file: ${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json (user
 # scope). Pass --settings .claude/settings.json inside a project for project
@@ -17,13 +22,17 @@ set -euo pipefail
 
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOOK_SCRIPT="$CURRENT_DIR/claude_hook.sh"
+STATUSLINE_SCRIPT="$CURRENT_DIR/claude_statusline.sh"
 # Matched against existing commands to find our own entries (any plugin path).
 MARKER="/bin/claude_hook.sh"
+SL_MARKER="/bin/claude_statusline.sh"
 
 SETTINGS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
 UNINSTALL=false
 DRY_RUN=false
 PRINT=false
+STATUSLINE=false
+STATUSLINE_CMD=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -33,6 +42,11 @@ while [[ $# -gt 0 ]]; do
     SETTINGS="${1:-}"
     ;;
   --uninstall) UNINSTALL=true ;;
+  --statusline) STATUSLINE=true ;;
+  --statusline=*)
+    STATUSLINE=true
+    STATUSLINE_CMD="${1#*=}"
+    ;;
   --dry-run) DRY_RUN=true ;;
   --print) PRINT=true ;;
   -h | --help)
@@ -111,6 +125,33 @@ fi
 NEW="$(printf '%s' "$CURRENT" | jq --argjson entries "$ENTRIES" --arg cmd "$HOOK_CMD" \
   --arg marker "$MARKER" --argjson uninstall "$UNINSTALL" "$JQ_PROGRAM")"
 
+# Status line: wrap on --statusline, unwrap on --uninstall, otherwise untouched.
+# The inner command is stored as one single-quoted argument of the wrapper so
+# it survives any shell syntax it contains and can be recovered on uninstall.
+sl_current="$(printf '%s' "$NEW" | jq -r '.statusLine.command // empty')"
+sl_inner="$sl_current"
+if [[ "$sl_current" == *"$SL_MARKER"* ]]; then
+  sl_rest="${sl_current#*"$SL_MARKER"\"}"
+  eval "set -- $sl_rest"
+  sl_inner="${1:-}"
+fi
+if [[ "$UNINSTALL" == "true" && "$sl_current" == *"$SL_MARKER"* ]]; then
+  if [[ -n "$sl_inner" ]]; then
+    NEW="$(printf '%s' "$NEW" | jq --arg c "$sl_inner" '.statusLine.command = $c')"
+  else
+    NEW="$(printf '%s' "$NEW" | jq 'del(.statusLine)')"
+  fi
+elif [[ "$STATUSLINE" == "true" && "$UNINSTALL" != "true" ]]; then
+  [[ -x "$STATUSLINE_SCRIPT" ]] || {
+    echo "Status line script not found or not executable: $STATUSLINE_SCRIPT" >&2
+    exit 1
+  }
+  [[ -n "$STATUSLINE_CMD" ]] && sl_inner="$STATUSLINE_CMD"
+  sl_new="\"$STATUSLINE_SCRIPT\""
+  [[ -n "$sl_inner" ]] && sl_new+=" '${sl_inner//\'/\'\\\'\'}'"
+  NEW="$(printf '%s' "$NEW" | jq --arg c "$sl_new" '.statusLine = ((.statusLine // {}) + {type: "command", command: $c})')"
+fi
+
 if [[ "$(printf '%s' "$CURRENT" | jq -S .)" == "$(printf '%s' "$NEW" | jq -S .)" ]]; then
   echo "No changes needed: $SETTINGS"
   exit 0
@@ -141,5 +182,8 @@ if [[ "$UNINSTALL" == "true" ]]; then
 else
   echo "Installed fuzzmux Claude Code hooks into $SETTINGS"
   echo "Hook: $HOOK_SCRIPT"
+  if [[ "$STATUSLINE" == "true" ]]; then
+    echo "Status line: $STATUSLINE_SCRIPT${sl_inner:+ wrapping: $sl_inner}"
+  fi
   echo "New Claude Code sessions pick this up immediately; check with /hooks inside Claude Code."
 fi
