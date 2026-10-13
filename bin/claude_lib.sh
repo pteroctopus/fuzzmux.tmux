@@ -20,6 +20,8 @@
 #       @fuzzmux-claude-since   epoch seconds when that state was entered
 #       @fuzzmux-claude-detail  free text, e.g. the tool awaiting permission
 #       @fuzzmux-claude-mode    Claude's permission mode (hook payloads only)
+#       @fuzzmux-claude-context percent of the context window used, written by
+#                               bin/claude_statusline.sh from the status line JSON
 #     Hooks are event-driven and know things the state file does not: which
 #     tool waits for permission, whether a question is pending, and only hooks
 #     can tell an unread finished turn ("waiting") from an agent whose output
@@ -32,7 +34,9 @@
 # fields separated by CLAUDE_DEL (ASCII unit separator - unlike a tab it is not
 # whitespace, so `read` keeps empty fields in place):
 #   pane_id state since detail name cwd session window pane_index title
-#   pane_active window_active session_attached source mode session_id
+#   pane_active window_active session_attached source mode session_id context
+# where context is "NN%" (status line wrapper), "NNNk" tokens read from the
+# transcript when no percentage is known, or empty.
 
 CLAUDE_DEL=$'\x1f'
 # Claude Code prefixes its pane title with this glyph (U+2733, as UTF-8 bytes so
@@ -214,9 +218,30 @@ claude_is_shell() {
 
 # Remove stale hook state from a pane whose Claude process is gone.
 claude_clear_pane_state() {
-  tmux set-option -pu -t "$1" @fuzzmux-claude-state 2>/dev/null || true
-  tmux set-option -pu -t "$1" @fuzzmux-claude-since 2>/dev/null || true
-  tmux set-option -pu -t "$1" @fuzzmux-claude-detail 2>/dev/null || true
+  local o
+  for o in state since detail mode context; do
+    tmux set-option -pu -t "$1" "@fuzzmux-claude-$o" 2>/dev/null || true
+  done
+}
+
+# Tokens in the context after the session's last turn: input plus cache tokens
+# of the last real assistant message in the transcript, the same sum Claude
+# Code's own percentage is based on. Only the tail of the transcript is read.
+# Empty when there is no transcript, no jq, or no usage in the tail.
+claude_context_tokens() {
+  local sid=$1 f size t
+  command -v jq >/dev/null 2>&1 || return 0
+  for f in "$(claude_config_dir)"/projects/*/"$sid".jsonl; do
+    [[ -f "$f" ]] || continue
+    size="$(stat -f %z "$f" 2>/dev/null || stat -c %s "$f" 2>/dev/null || echo 0)"
+    t="$( { if ((size > 300000)); then tail -c 300000 "$f" | sed '1d'; else cat "$f"; fi; } 2>/dev/null |
+      jq -r 'select(.type == "assistant" and .message.usage != null and .message.model != "<synthetic>")
+             | .message.usage
+             | ((.input_tokens // 0) + (.cache_creation_input_tokens // 0) + (.cache_read_input_tokens // 0))' 2>/dev/null |
+      tail -n 1)"
+    [[ "$t" =~ ^[0-9]+$ ]] && printf '%s' "$t"
+    return 0
+  done
 }
 
 claude_agents_list() {
@@ -224,15 +249,15 @@ claude_agents_list() {
 
   # --- All panes in one tmux call, hook state included via pane user options.
   local -A P_SESSION P_WINDOW P_INDEX P_TITLE P_CMD P_ACTIVE P_WACTIVE P_ATTACHED
-  local -A P_STATE P_SINCE P_DETAIL P_PATH P_MODE
-  local pane sess win idx title cmd active wactive attached hstate hsince hdetail hmode path
+  local -A P_STATE P_SINCE P_DETAIL P_PATH P_MODE P_CTX
+  local pane sess win idx title cmd active wactive attached hstate hsince hdetail hmode hctx path
   local format
   format="#{pane_id}${DEL}#{session_name}${DEL}#{window_index}${DEL}#{pane_index}${DEL}"
   format+="#{pane_title}${DEL}#{pane_current_command}${DEL}#{pane_active}${DEL}"
   format+="#{window_active}${DEL}#{session_attached}${DEL}#{@fuzzmux-claude-state}${DEL}"
   format+="#{@fuzzmux-claude-since}${DEL}#{@fuzzmux-claude-detail}${DEL}#{@fuzzmux-claude-mode}${DEL}"
-  format+="#{pane_current_path}"
-  while IFS="$DEL" read -r pane sess win idx title cmd active wactive attached hstate hsince hdetail hmode path; do
+  format+="#{@fuzzmux-claude-context}${DEL}#{pane_current_path}"
+  while IFS="$DEL" read -r pane sess win idx title cmd active wactive attached hstate hsince hdetail hmode hctx path; do
     [[ "$pane" =~ ^%[0-9]+$ ]] || continue
     P_SESSION[$pane]=$sess
     P_WINDOW[$pane]=$win
@@ -244,6 +269,7 @@ claude_agents_list() {
     P_ATTACHED[$pane]=$attached
     P_PATH[$pane]=$path
     P_MODE[$pane]=$hmode
+    P_CTX[$pane]=$hctx
     if [[ -n "$hstate" ]]; then
       P_STATE[$pane]=$hstate
       P_SINCE[$pane]=$hsince
@@ -287,7 +313,7 @@ claude_agents_list() {
   # (covers a hook left at "working" after the user interrupted Claude with
   # Esc, where no Stop fires, and a permission prompt the file still calls busy).
   local -A SEEN
-  local state since detail origin fstate fclass hclass cwd out=""
+  local state since detail origin fstate fclass hclass cwd ctx tokens out=""
   for pane in "${!F_STATUS[@]}" "${!P_STATE[@]}"; do
     [[ -n "${SEEN[$pane]:-}" ]] && continue
     SEEN[$pane]=1
@@ -331,8 +357,21 @@ claude_agents_list() {
     out+="${pane}${DEL}${state}${DEL}${since}${DEL}${detail}${DEL}${F_NAME[$pane]:-}${DEL}${cwd}${DEL}"
     out+="${P_SESSION[$pane]}${DEL}${P_WINDOW[$pane]}${DEL}${P_INDEX[$pane]}${DEL}"
     out+="$(claude_clean_title "${P_TITLE[$pane]}")${DEL}"
+    # Context usage: the status line wrapper's percentage when it has run for
+    # this pane, otherwise the token count from the transcript tail.
+    ctx="${P_CTX[$pane]:-}"
+    if [[ "$ctx" =~ ^[0-9]+$ ]]; then
+      ctx="${ctx}%"
+    elif [[ -n "${F_SID[$pane]:-}" ]]; then
+      tokens="$(claude_context_tokens "${F_SID[$pane]}")"
+      ctx=""
+      [[ -n "$tokens" ]] && ctx="$((tokens / 1000))k"
+    else
+      ctx=""
+    fi
+
     out+="${P_ACTIVE[$pane]}${DEL}${P_WACTIVE[$pane]}${DEL}${P_ATTACHED[$pane]}${DEL}${origin}${DEL}"
-    out+="${P_MODE[$pane]:-}${DEL}${F_SID[$pane]:-}"$'\n'
+    out+="${P_MODE[$pane]:-}${DEL}${F_SID[$pane]:-}${DEL}${ctx}"$'\n'
   done
 
   [[ -n "$out" ]] || return 0

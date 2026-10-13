@@ -293,7 +293,7 @@ done
 
 # Running instances: session id -> pane and state.
 declare -A RUN_PANE RUN_STATE
-while IFS="$DEL" read -r pane state _since _detail _name _cwd _sess _win _idx _title _pa _wa _sa _src _mode sid; do
+while IFS="$DEL" read -r pane state _since _detail _name _cwd _sess _win _idx _title _pa _wa _sa _src _mode sid _ctx; do
   [[ -n "${sid:-}" ]] || continue
   RUN_PANE[$sid]=$pane
   RUN_STATE[$sid]=$state

@@ -194,7 +194,8 @@ session-end)
   tmux set-option -pu -t "$pane" @fuzzmux-claude-state \; \
     set-option -pu -t "$pane" @fuzzmux-claude-since \; \
     set-option -pu -t "$pane" @fuzzmux-claude-detail \; \
-    set-option -pu -t "$pane" @fuzzmux-claude-mode 2>/dev/null
+    set-option -pu -t "$pane" @fuzzmux-claude-mode \; \
+    set-option -pu -t "$pane" @fuzzmux-claude-context 2>/dev/null
   exit 0
   ;;
 *)
